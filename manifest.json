@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Feed Scroller",
+  "version": "1.0.0",
+  "description": "Scrolls feed for 5 seconds, then scrolls to top and clicks 2nd div in post container",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Feed Scroller"
+  }
+}
