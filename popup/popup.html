@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScrapeBook</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <!-- Compact header keeps the extension identity visible without distraction. -->
+      <header class="header">
+        <div>
+          <p class="eyebrow">ScrapeBook</p>
+          <h1>Facebook Post Scanner</h1>
+        </div>
+        <span class="status" id="status"><i></i>Stopped</span>
+      </header>
+
+      <section class="metric-row" aria-label="Scanner status">
+        <div class="metric"><span>Phase</span><strong id="phase">Ready</strong></div>
+        <div class="metric"><span>Posts</span><strong id="post-count">0</strong></div>
+      </section>
+
+      <div class="actions">
+        <button class="button primary" id="start" type="button">Start scanner</button>
+        <button class="button secondary" id="stop" type="button">Stop</button>
+        <button class="button secondary" id="restart" type="button">Start over</button>
+      </div>
+
+      <div class="export-actions">
+        <!-- Exports are manual so scanning never triggers an unexpected download. -->
+        <button class="button secondary" id="export-json" type="button">Export JSON</button>
+        <button class="button secondary" id="export-txt" type="button">Export TXT</button>
+      </div>
+
+      <button class="clear-button" id="clear-state" type="button">Clear saved data</button>
+
+      <section class="activity">
+        <div class="section-heading"><span>Activity</span><span id="log-count">0 events</span></div>
+        <ol class="log-list" id="logs" aria-live="polite"></ol>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

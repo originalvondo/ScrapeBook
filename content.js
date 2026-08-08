@@ -83,7 +83,7 @@ function clickCommentButtonInFirstPost() {
     return;
   }
   
-  const firstPost = posts[5];
+  const firstPost = posts[1];
   
   // Find the div with aria-label="Leave a comment" inside the first post
   const commentButton = firstPost.querySelector('div[aria-label="Leave a comment"]');
@@ -103,11 +103,11 @@ function scrollPostScrollableSection() {
     // Wait a bit for the post dialog to appear after clicking
     setTimeout(() => {
       const scrollableSection = document.querySelector(POST_SCROLLABLE_SECTION_SELECTOR);
-      if (!scrollableSection) {
-        logError('Post scrollable section not found');
-        resolve();
-        return;
-      }
+      // if (!scrollableSection) {
+      //   logError('Post scrollable section not found');
+      //   resolve();
+      //   return;
+      // }
       
       logAction('Starting to scroll post scrollable section for 5 seconds...');
       const startTime = Date.now();

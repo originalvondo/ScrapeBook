@@ -1,19 +1,28 @@
 {
+  "name": "ScrapeBook",
+  "description": "A lightweight Facebook post browsing and scraping automation tool.",
+  "version": "0.1.0",
   "manifest_version": 3,
-  "name": "Feed Scroller",
-  "version": "1.0.0",
-  "description": "Scrolls feed for 5 seconds, then scrolls to top and clicks 2nd div in post container",
-  "permissions": ["activeTab", "scripting"],
-  "host_permissions": ["<all_urls>"],
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://facebook.com/*"
   ],
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Feed Scroller"
-  }
+    "default_title": "ScrapeBook",
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://facebook.com/*"
+      ],
+      "js": ["content/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }
