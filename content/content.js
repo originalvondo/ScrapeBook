@@ -14,6 +14,10 @@ const POST_SETTLE_WAIT_MS = 500;
 // Facebook selectors are kept together so DOM changes have one obvious home.
 const COMMENT_BUTTON_SELECTOR = 'div[aria-label="Leave a comment"]';
 const POST_DIALOG_SELECTOR = '[role="dialog"]';
+const ALL_COMMENTS_TRIGGER_SELECTOR =
+  'div.x1i10hfl.xjbqb8w.x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x972fbf.x10w94by.x1qhh985.x14e42zd.x9f619.x1ypdohk.xt0psk2.x3ct3a4.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x16tdsg8.x1hl2dhg.xggy1nq.x1fmog5m.xu25z0z.x140muxe.xo1y3bh.x1n2onr6.x87ps6o.x1lku1pv.x1a2a7pz';
+const ALL_COMMENTS_BUTTON_SELECTOR =
+  'span.x193iq5w.xeuugli.x13faqbe.x1vvkbs.x1xmvt09.x1lliihq.x1s928wv.xhkezso.x1gmr53x.x1cpjm7i.x1fgarty.x1943h6x.xudqn12.x3x7a5m.x6prxxf.xvq8zen.xk50ysn.xzsf02u.x1yc453h';
 const COMMENTS_CONTAINER_SELECTOR =
   'div.html-div.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1gslohp';
 const POST_CONTENT_CONTAINER_SELECTOR =
@@ -235,6 +239,42 @@ async function openPost(article) {
   return true;
 }
 
+async function clickAllComments() {
+  // Click the trigger div that reveals the "All comments" button
+  await wait(300);
+  const trigger = document.querySelector(ALL_COMMENTS_TRIGGER_SELECTOR);
+  if (!trigger) {
+    log('All comments trigger not found', 'warning');
+    return false;
+  }
+
+  trigger.click();
+  await wait(300);
+
+  // Find and click the "All comments" span by class and text content
+  const allCommentsSpans = document.querySelectorAll(ALL_COMMENTS_BUTTON_SELECTOR);
+  let allCommentsButton = null;
+
+  for (const span of allCommentsSpans) {
+    if (span.textContent.trim().toLowerCase() === 'all comments') {
+      allCommentsButton = span;
+      break;
+    }
+  }
+
+  if (!allCommentsButton) {
+    log('All comments button not found', 'warning');
+    return false;
+  }
+
+  await wait(300);
+  allCommentsButton.click();
+  log('Clicked All comments');
+  await wait(300);
+
+  return true;
+}
+
 async function scrollComments() {
   // Scroll only Facebook's verified dialog section, never the feed itself.
   await wait(500);
@@ -305,6 +345,7 @@ async function runLoop() {
     log(`Processing post ${state.postIndex}`);
     const opened = await openPost(article);
     if (opened) {
+      await clickAllComments();
       const scrolled = await scrollComments();
       if (scrolled) {
         const postNumber = state.postIndex;
