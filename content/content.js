@@ -18,6 +18,8 @@ const ALL_COMMENTS_TRIGGER_SELECTOR =
   'div.x1i10hfl.xjbqb8w.x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x972fbf.x10w94by.x1qhh985.x14e42zd.x9f619.x1ypdohk.xt0psk2.x3ct3a4.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x16tdsg8.x1hl2dhg.xggy1nq.x1fmog5m.xu25z0z.x140muxe.xo1y3bh.x1n2onr6.x87ps6o.x1lku1pv.x1a2a7pz';
 const ALL_COMMENTS_BUTTON_SELECTOR =
   'span.x193iq5w.xeuugli.x13faqbe.x1vvkbs.x1xmvt09.x1lliihq.x1s928wv.xhkezso.x1gmr53x.x1cpjm7i.x1fgarty.x1943h6x.xudqn12.x3x7a5m.x6prxxf.xvq8zen.xk50ysn.xzsf02u.x1yc453h';
+const REPLIES_BUTTON_SELECTOR =
+  'div.x1i10hfl.xjbqb8w.xjqpnuy.xc5r6h4.xqeqjp1.x1phubyo.x13fuv20.x18b5jzi.x1q0q8m5.x1t7ytsu.x972fbf.x10w94by.x1qhh985.x14e42zd.x9f619.x1ypdohk.xdl72j9.x3ct3a4.xdj266r.x14z9mp.xat24cr.x1lziwak.x2lwn1j.xeuugli.xexx8yu.x18d9i69.x1c1uobl.x1n2onr6.x16tdsg8.x1hl2dhg.xggy1nq.x1ja2u2z.x1t137rt.x1fmog5m.xu25z0z.x140muxe.xo1y3bh.x3nfvp2.x87ps6o.x1lku1pv.x1a2a7pz.x6s0dn4.xi81zsa.x1q0g3np.x1iyjqo2.xs83m0k.x1icxu4v[role="button"]';
 const COMMENTS_CONTAINER_SELECTOR =
   'div.html-div.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1gslohp';
 const POST_CONTENT_CONTAINER_SELECTOR =
@@ -241,7 +243,7 @@ async function openPost(article) {
 
 async function clickAllComments() {
   // Click the trigger div that reveals the "All comments" button
-  await wait(300);
+  await wait(800);
   const trigger = document.querySelector(ALL_COMMENTS_TRIGGER_SELECTOR);
   if (!trigger) {
     log('All comments trigger not found', 'warning');
@@ -275,6 +277,24 @@ async function clickAllComments() {
   return true;
 }
 
+async function clickRepliesButtons() {
+  // Click all visible "View replies" buttons to expand replies
+  const commentsContainer = document.querySelector(COMMENTS_CONTAINER_SELECTOR);
+  const repliesButtons = commentsContainer.querySelectorAll(REPLIES_BUTTON_SELECTOR);
+  let clicked = 0;
+  for (const button of repliesButtons) {
+    if (button.offsetParent !== null) { // Only click visible buttons
+      button.click();
+      clicked++;
+      await wait(200); // Small delay between clicks
+    }
+  }
+  if (clicked > 0) {
+    log(`Clicked ${clicked} replies buttons`);
+  }
+  return clicked > 0;
+}
+
 async function scrollComments() {
   // Scroll only Facebook's verified dialog section, never the feed itself.
   await wait(500);
@@ -286,6 +306,29 @@ async function scrollComments() {
 
   setPhase('Scrolling comments');
 
+  // Scroll to bottom to load all comments
+  await new Promise((resolve) => {
+    const startTime = Date.now();
+    const interval = window.setInterval(() => {
+      if (Date.now() - startTime >= COMMENT_SCROLL_DURATION_MS) {
+        window.clearInterval(interval);
+        resolve();
+        return;
+      }
+
+      scrollableSection.scrollBy({ top: COMMENT_SCROLL_STEP_PX, behavior: 'auto' });
+    }, COMMENT_SCROLL_INTERVAL_MS);
+  });
+
+  // Click replies buttons once (for first-level replies)
+  await clickRepliesButtons();
+  await wait(500);
+
+  // Click replies buttons again (for replies to replies)
+  await clickRepliesButtons();
+  await wait(500);
+
+  // Final scroll to load any newly expanded content
   await new Promise((resolve) => {
     const startTime = Date.now();
     const interval = window.setInterval(() => {
