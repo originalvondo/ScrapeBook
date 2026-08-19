@@ -141,18 +141,25 @@ function cleanComment(comment) {
 }
 
 function extractComments() {
-  // Direct children represent comments; nested descendants may represent replies.
+  // Extract comments and their replies using the unified selector
   const container = document.querySelector(COMMENTS_CONTAINER_SELECTOR);
   if (!container) return {};
 
   const comments = {};
-  [...container.querySelectorAll(':scope > div')]
-    .map((comment) => cleanComment(comment.innerText.trim()))
-    .filter(Boolean)
-    .forEach((comment) => {
-      const [username, ...commentLines] = comment.split('\n');
-      comments[username] = commentLines.join('\n').trim();
-    });
+  const commentDivs = container.querySelectorAll('div.x1nn3v0j.x1120s5i.x135b78x.x11lfxj5');
+
+  for (const commentDiv of commentDivs) {
+    const commentText = cleanComment(commentDiv.innerText.trim());
+    if (!commentText) continue;
+
+    const [username, ...commentLines] = commentText.split('\n');
+    const commentBody = commentLines.join('\n').trim();
+
+    comments[username] = {
+      comment: commentBody,
+      replies: []
+    };
+  }
 
   return comments;
 }
@@ -178,7 +185,19 @@ function exportAsTXT(posts) {
     'Comments:',
     ...(Object.keys(post.comments).length
       ? [Object.entries(post.comments)
-        .map(([username, comment], index) => `${index + 1}. ${username}\n${comment}`)
+        .map(([username, data], index) => {
+          let output = `${index + 1}. ${username}\n${data.comment}`;
+          if (data.replies && data.replies.length > 0) {
+            output += '\nReplies:';
+            data.replies.forEach((reply, replyIndex) => {
+              const [replyUsername, ...replyLines] = reply.split('\n');
+              const replyBody = replyLines.join('\n').trim();
+              output += `\n--- #${replyIndex + 1} : ${replyUsername}`;
+              output += `\n------ ${replyBody}`;
+            });
+          }
+          return output;
+        })
         .join('\n\n')]
       : ['(No comments found)'])
   ].join('\n')).join('\n\n----------------------------------------\n\n');
