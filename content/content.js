@@ -1,7 +1,13 @@
-const LOG_PREFIX = '[ScrapeBook]';
-const STATUS_KEY = 'scrapebookStatus';
-const SCRAPED_POSTS_KEY = 'scrapebookPosts';
-const MAX_LOGS = 80;
+(() => {
+  if (window.__scrapebookContentScriptLoaded) {
+    return;
+  }
+  window.__scrapebookContentScriptLoaded = true;
+
+  const LOG_PREFIX = '[ScrapeBook]';
+  const STATUS_KEY = 'scrapebookStatus';
+  const SCRAPED_POSTS_KEY = 'scrapebookPosts';
+  const MAX_LOGS = 80;
 
 // Frequently adjusted scan settings live here instead of inside the workflow.
 const MAX_POSTS_TO_SCRAPE = 10;
@@ -10,6 +16,8 @@ const COMMENT_SCROLL_STEP_PX = 300;
 const COMMENT_SCROLL_INTERVAL_MS = 100;
 const FEED_SCROLL_WAIT_MS = 1200;
 const POST_SETTLE_WAIT_MS = 500;
+const ALL_COMMENTS_WAIT_TIMEOUT_MS = 10000;
+const ALL_COMMENTS_POLL_INTERVAL_MS = 200;
 
 // Facebook selectors are kept together so DOM changes have one obvious home.
 const COMMENT_BUTTON_SELECTOR = 'div[aria-label="Leave a comment"]';
@@ -143,9 +151,9 @@ function cleanComment(comment) {
 function extractComments() {
   // Extract comments and their replies using the unified selector
   const container = document.querySelector(COMMENTS_CONTAINER_SELECTOR);
-  if (!container) return {};
+  if (!container) return [];
 
-  const comments = {};
+  const comments = [];
   const commentDivs = container.querySelectorAll('div.x1nn3v0j.x1120s5i.x135b78x.x11lfxj5');
 
   for (const commentDiv of commentDivs) {
@@ -155,10 +163,11 @@ function extractComments() {
     const [username, ...commentLines] = commentText.split('\n');
     const commentBody = commentLines.join('\n').trim();
 
-    comments[username] = {
+    comments.push({
+      username,
       comment: commentBody,
       replies: []
-    };
+    });
   }
 
   return comments;
@@ -167,7 +176,7 @@ function extractComments() {
 function logExtractedPost(post) {
   // One compact success event replaces several noisy extraction messages.
   const contentStatus = post.postContent ? 'content found' : 'content missing';
-  log(`Post ${post.postNumber} extracted - ${contentStatus} - ${Object.keys(post.comments).length} comments`, 'success');
+  log(`Post ${post.postNumber} extracted - ${contentStatus} - ${post.comments.length} comments`, 'success');
 }
 
 function exportAsJSON(posts) {
@@ -183,10 +192,10 @@ function exportAsTXT(posts) {
     post.postContent || '(No post content found)',
     '',
     'Comments:',
-    ...(Object.keys(post.comments).length
-      ? [Object.entries(post.comments)
-        .map(([username, data], index) => {
-          let output = `${index + 1}. ${username}\n${data.comment}`;
+    ...(post.comments.length
+      ? [post.comments
+        .map((data, index) => {
+          let output = `${index + 1}. ${data.username}\n${data.comment}`;
           if (data.replies && data.replies.length > 0) {
             output += '\nReplies:';
             data.replies.forEach((reply, replyIndex) => {
@@ -260,38 +269,106 @@ async function openPost(article) {
   return true;
 }
 
-async function clickAllComments() {
-  // Click the trigger div that reveals the "All comments" button
-  await wait(800);
-  const trigger = document.querySelector(ALL_COMMENTS_TRIGGER_SELECTOR);
-  if (!trigger) {
-    log('All comments trigger not found', 'warning');
-    return false;
+function findTriggerElement(dialog) {
+  const root = dialog || document;
+
+  // 1. Try the specific selector first
+  const specificTrigger = root.querySelector(ALL_COMMENTS_TRIGGER_SELECTOR);
+  if (specificTrigger && specificTrigger.offsetParent !== null) {
+    return specificTrigger;
   }
 
-  trigger.click();
-  await wait(300);
-
-  // Find and click the "All comments" span by class and text content
-  const allCommentsSpans = document.querySelectorAll(ALL_COMMENTS_BUTTON_SELECTOR);
-  let allCommentsButton = null;
-
-  for (const span of allCommentsSpans) {
-    if (span.textContent.trim().toLowerCase() === 'all comments') {
-      allCommentsButton = span;
-      break;
+  // 2. Search for elements containing comment sorting filter labels
+  const candidates = root.querySelectorAll('div[role="button"], div.x1i10hfl, span');
+  for (const el of candidates) {
+    if (el.offsetParent === null) continue;
+    const text = el.textContent.trim().toLowerCase();
+    if (
+      text === 'most relevant' ||
+      text === 'top comments' ||
+      text === 'all comments' ||
+      text === 'newest' ||
+      text.startsWith('most relevant') ||
+      text.startsWith('top comments')
+    ) {
+      return el.closest('[role="button"]') || el.closest('div.x1i10hfl') || el;
     }
   }
 
-  if (!allCommentsButton) {
-    log('All comments button not found', 'warning');
+  return null;
+}
+
+function findAllCommentsOption() {
+  // 1. Try the specific selector first
+  const spans = document.querySelectorAll(ALL_COMMENTS_BUTTON_SELECTOR);
+  for (const span of spans) {
+    if (span.offsetParent !== null && span.textContent.trim().toLowerCase() === 'all comments') {
+      return span.closest('[role="menuitem"]') || span.closest('[role="button"]') || span.closest('div.x1i10hfl') || span;
+    }
+  }
+
+  // 2. Search all visible menu items, buttons, or spans with text "all comments"
+  const candidates = document.querySelectorAll('[role="menuitem"], [role="menu"] div, [role="menu"] span, div[role="button"], span');
+  for (const el of candidates) {
+    if (el.offsetParent === null) continue;
+    const text = el.textContent.trim().toLowerCase();
+    if (text === 'all comments') {
+      return el.closest('[role="menuitem"]') || el.closest('[role="button"]') || el.closest('div.x1i10hfl') || el;
+    }
+  }
+
+  return null;
+}
+
+async function clickAllComments() {
+  setPhase('Waiting for comments filter');
+
+  // Wait with polling up to ALL_COMMENTS_WAIT_TIMEOUT_MS for the sorting trigger to appear
+  const startTime = Date.now();
+  let trigger = null;
+
+  while (!isStopRequested() && Date.now() - startTime < ALL_COMMENTS_WAIT_TIMEOUT_MS) {
+    const dialog = document.querySelector(POST_DIALOG_SELECTOR);
+    trigger = findTriggerElement(dialog);
+    if (trigger) break;
+    await wait(ALL_COMMENTS_POLL_INTERVAL_MS);
+  }
+
+  if (!trigger) {
+    log('All comments trigger not found (continuing scan)', 'warning');
     return false;
   }
 
-  await wait(300);
+  // Check if "All comments" is already selected
+  const triggerText = trigger.textContent.trim().toLowerCase();
+  if (triggerText === 'all comments') {
+    log('All comments already active');
+    return true;
+  }
+
+  setPhase('Selecting All comments');
+  trigger.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+  trigger.click();
+
+  // Poll for the "All comments" menu option in the opened dropdown (up to 5s)
+  const menuStartTime = Date.now();
+  let allCommentsButton = null;
+
+  while (!isStopRequested() && Date.now() - menuStartTime < 5000) {
+    allCommentsButton = findAllCommentsOption();
+    if (allCommentsButton) break;
+    await wait(ALL_COMMENTS_POLL_INTERVAL_MS);
+  }
+
+  if (!allCommentsButton) {
+    log('All comments option not found in menu', 'warning');
+    return false;
+  }
+
+  await wait(200);
   allCommentsButton.click();
-  log('Clicked All comments');
-  await wait(300);
+  log('Clicked All comments', 'success');
+  await wait(800);
 
   return true;
 }
@@ -501,3 +578,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
+})();

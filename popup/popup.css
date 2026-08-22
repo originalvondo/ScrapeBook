@@ -16,15 +16,21 @@
 * { box-sizing: border-box; }
 
 body {
-  width: 360px;
-  min-height: 420px;
+  width: 100%;
+  min-height: 100vh;
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font: 13px/1.4 "Segoe UI", sans-serif;
+  overflow-x: hidden;
 }
 
-.popup-shell { padding: 16px; }
+.popup-shell {
+  padding: 16px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 /* Header and status provide the persistent ScrapeBook identity. */
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .eyebrow { margin: 0 0 3px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
@@ -49,9 +55,16 @@ h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0; }
 .clear-button { width: 100%; margin: 0 0 14px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 11px; text-align: left; }
 .clear-button:hover { color: var(--red); }
 .clear-button:disabled { cursor: default; opacity: .45; }
-.activity { border-top: 1px solid var(--border); padding-top: 13px; }
+.activity {
+  border-top: 1px solid var(--border);
+  padding-top: 13px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+}
 .section-heading { display: flex; justify-content: space-between; margin-bottom: 7px; text-transform: uppercase; letter-spacing: .05em; }
-.log-list { display: flex; flex-direction: column; gap: 2px; max-height: 214px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.log-list { display: flex; flex-direction: column; gap: 2px; flex: 1; max-height: none; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
 .log-item { display: grid; grid-template-columns: 47px 1fr; gap: 8px; padding: 5px 7px; border-radius: 3px; color: var(--cyan); background: transparent; font-size: 12px; }
 .log-item:hover { background: var(--panel); }
 .log-item time { color: var(--muted); font-variant-numeric: tabular-nums; }

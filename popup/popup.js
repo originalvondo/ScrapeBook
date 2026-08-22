@@ -12,7 +12,56 @@ const clearStateButton = document.querySelector('#clear-state');
 
 let activeTabId;
 
-// Render all popup state from one storage/message snapshot.
+function isFacebookUrl(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === 'facebook.com' || parsed.hostname.endsWith('.facebook.com');
+  } catch {
+    return false;
+  }
+}
+
+async function getActiveTab() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tabs[0];
+}
+
+async function ensureTabReady(tabId) {
+  if (!tabId) return false;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab || !isFacebookUrl(tab.url)) return false;
+
+    // Check if the content script is already responding
+    const isResponding = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { type: 'GET_STATUS' }, (response) => {
+        if (chrome.runtime.lastError || !response) {
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+
+    if (isResponding) return true;
+
+    // Inject content script dynamically if not responding
+    if (chrome.scripting) {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/content.js']
+      });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return true;
+    }
+  } catch (error) {
+    console.warn('ensureTabReady error:', error);
+  }
+  return false;
+}
+
+// Render all panel state from one storage/message snapshot.
 function render(status = {}) {
   const running = Boolean(status.running);
   statusElement.classList.toggle('running', running);
@@ -46,19 +95,39 @@ function render(status = {}) {
   });
 }
 
-function sendToTab(type) {
+async function sendToTab(type) {
   // Scanner commands are sent to the active Facebook tab.
-  if (!activeTabId) return;
-  chrome.tabs.sendMessage(activeTabId, { type }, () => {
-    if (chrome.runtime.lastError) render({ phase: 'Open Facebook to scan' });
+  const tab = await getActiveTab();
+  activeTabId = tab?.id;
+  if (!activeTabId || !tab || !isFacebookUrl(tab.url)) {
+    render({ phase: 'Open Facebook to scan' });
+    return;
+  }
+
+  chrome.tabs.sendMessage(activeTabId, { type }, async () => {
+    if (chrome.runtime.lastError) {
+      const ready = await ensureTabReady(activeTabId);
+      if (ready) {
+        chrome.tabs.sendMessage(activeTabId, { type }, () => {
+          if (chrome.runtime.lastError) render({ phase: 'Open Facebook to scan' });
+        });
+      } else {
+        render({ phase: 'Open Facebook to scan' });
+      }
+    }
   });
 }
 
-function downloadExport(type, filename) {
-  // The popup owns the browser download; the tab supplies serialized data.
-  if (!activeTabId) return;
+async function downloadExport(type, filename) {
+  // The panel owns the browser download; the tab supplies serialized data.
+  const tab = await getActiveTab();
+  activeTabId = tab?.id;
+  if (!activeTabId || !tab || !isFacebookUrl(tab.url)) {
+    render({ phase: 'Open Facebook to export' });
+    return;
+  }
 
-  chrome.tabs.sendMessage(activeTabId, { type }, (response) => {
+  const handleResponse = (response) => {
     if (chrome.runtime.lastError || !response) {
       render({ phase: 'Open Facebook to export' });
       return;
@@ -71,25 +140,63 @@ function downloadExport(type, filename) {
     link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  chrome.tabs.sendMessage(activeTabId, { type }, async (response) => {
+    if (chrome.runtime.lastError || !response) {
+      const ready = await ensureTabReady(activeTabId);
+      if (ready) {
+        chrome.tabs.sendMessage(activeTabId, { type }, handleResponse);
+      } else {
+        render({ phase: 'Open Facebook to export' });
+      }
+    } else {
+      handleResponse(response);
+    }
   });
 }
 
 async function loadStatus() {
-  // Stored state lets the popup recover the latest status after reopening.
+  // Stored state lets the panel recover the latest status after reopening.
   const stored = await chrome.storage.local.get('scrapebookStatus');
   render(stored.scrapebookStatus);
 }
 
-chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-  // Prefer live tab state, falling back to the last persisted snapshot.
-  activeTabId = tabs[0]?.id;
-  if (activeTabId) {
-    chrome.tabs.sendMessage(activeTabId, { type: 'GET_STATUS' }, (status) => {
-      if (chrome.runtime.lastError || !status) loadStatus();
-      else render(status);
+async function syncActiveTabStatus() {
+  const tab = await getActiveTab();
+  activeTabId = tab?.id;
+  if (activeTabId && tab && isFacebookUrl(tab.url)) {
+    chrome.tabs.sendMessage(activeTabId, { type: 'GET_STATUS' }, async (status) => {
+      if (chrome.runtime.lastError || !status) {
+        const ready = await ensureTabReady(activeTabId);
+        if (ready) {
+          chrome.tabs.sendMessage(activeTabId, { type: 'GET_STATUS' }, (newStatus) => {
+            if (chrome.runtime.lastError || !newStatus) loadStatus();
+            else render(newStatus);
+          });
+        } else {
+          loadStatus();
+        }
+      } else {
+        render(status);
+      }
     });
   } else {
     loadStatus();
+  }
+}
+
+// Initial status load and active tab status check
+syncActiveTabStatus();
+
+// Keep status synchronized when switching tabs or when the active tab finishes updating
+chrome.tabs.onActivated.addListener(() => {
+  syncActiveTabStatus();
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'complete') {
+    syncActiveTabStatus();
   }
 });
 
@@ -102,10 +209,21 @@ stopButton.addEventListener('click', () => sendToTab('STOP_SCAN'));
 restartButton.addEventListener('click', () => sendToTab('RESTART_SCAN'));
 exportJsonButton.addEventListener('click', () => downloadExport('EXPORT_JSON', 'scrapebook-data.json'));
 exportTxtButton.addEventListener('click', () => downloadExport('EXPORT_TXT', 'scrapebook-data.txt'));
-clearStateButton.addEventListener('click', () => {
-  chrome.storage.local.remove(['scrapebookStatus', 'scrapebookPosts'], () => {
-    if (activeTabId) {
-      chrome.tabs.sendMessage(activeTabId, { type: 'CLEAR_STORED_STATE' }, () => {
+clearStateButton.addEventListener('click', async () => {
+  const tab = await getActiveTab();
+  activeTabId = tab?.id;
+  chrome.storage.local.remove(['scrapebookStatus', 'scrapebookPosts'], async () => {
+    if (activeTabId && tab && isFacebookUrl(tab.url)) {
+      chrome.tabs.sendMessage(activeTabId, { type: 'CLEAR_STORED_STATE' }, async () => {
+        if (chrome.runtime.lastError) {
+          const ready = await ensureTabReady(activeTabId);
+          if (ready) {
+            chrome.tabs.sendMessage(activeTabId, { type: 'CLEAR_STORED_STATE' }, () => {
+              render({ phase: 'Ready' });
+            });
+            return;
+          }
+        }
         render({ phase: 'Ready' });
       });
     } else {
