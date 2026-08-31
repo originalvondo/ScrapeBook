@@ -10,6 +10,8 @@ const exportJsonButton = document.querySelector('#export-json');
 const exportTxtButton = document.querySelector('#export-txt');
 const clearStateButton = document.querySelector('#clear-state');
 
+const maxPostsElement = document.querySelector('#max-posts');
+
 let activeTabId;
 
 function isFacebookUrl(url) {
@@ -67,7 +69,20 @@ function render(status = {}) {
   statusElement.classList.toggle('running', running);
   statusElement.innerHTML = `<i></i>${running ? 'Running' : 'Stopped'}`;
   phaseElement.textContent = status.phase || 'Ready';
-  postCountElement.textContent = status.postIndex || 0;
+
+  const count = status.postIndex || 0;
+  const configuredMax = status.maxPosts !== undefined ? status.maxPosts : parseInt(maxPostsElement.value, 10);
+  if (configuredMax > 0) {
+    postCountElement.textContent = `${count} / ${configuredMax}`;
+  } else {
+    postCountElement.textContent = `${count}`;
+  }
+
+  if (status.maxPosts !== undefined && document.activeElement !== maxPostsElement) {
+    maxPostsElement.value = status.maxPosts;
+  }
+
+  maxPostsElement.disabled = running;
   startButton.textContent = status.nextPostIndex > 0 ? 'Resume scanner' : 'Start scanner';
   startButton.disabled = running;
   stopButton.disabled = !running;
@@ -95,6 +110,11 @@ function render(status = {}) {
   });
 }
 
+function getMaxPostsValue() {
+  const parsed = parseInt(maxPostsElement.value, 10);
+  return isNaN(parsed) || parsed < 0 ? 100 : parsed;
+}
+
 async function sendToTab(type) {
   // Scanner commands are sent to the active Facebook tab.
   const tab = await getActiveTab();
@@ -104,11 +124,16 @@ async function sendToTab(type) {
     return;
   }
 
-  chrome.tabs.sendMessage(activeTabId, { type }, async () => {
+  const maxPosts = getMaxPostsValue();
+  await chrome.storage.local.set({ scrapebookMaxPosts: maxPosts });
+
+  const payload = { type, maxPosts };
+
+  chrome.tabs.sendMessage(activeTabId, payload, async () => {
     if (chrome.runtime.lastError) {
       const ready = await ensureTabReady(activeTabId);
       if (ready) {
-        chrome.tabs.sendMessage(activeTabId, { type }, () => {
+        chrome.tabs.sendMessage(activeTabId, payload, () => {
           if (chrome.runtime.lastError) render({ phase: 'Open Facebook to scan' });
         });
       } else {
@@ -158,7 +183,10 @@ async function downloadExport(type, filename) {
 
 async function loadStatus() {
   // Stored state lets the panel recover the latest status after reopening.
-  const stored = await chrome.storage.local.get('scrapebookStatus');
+  const stored = await chrome.storage.local.get(['scrapebookStatus', 'scrapebookMaxPosts']);
+  if (stored.scrapebookMaxPosts !== undefined && document.activeElement !== maxPostsElement) {
+    maxPostsElement.value = stored.scrapebookMaxPosts;
+  }
   render(stored.scrapebookStatus);
 }
 
@@ -186,8 +214,16 @@ async function syncActiveTabStatus() {
   }
 }
 
+maxPostsElement.addEventListener('change', async () => {
+  const val = getMaxPostsValue();
+  maxPostsElement.value = val;
+  await chrome.storage.local.set({ scrapebookMaxPosts: val });
+  const stored = await chrome.storage.local.get('scrapebookStatus');
+  render(stored.scrapebookStatus);
+});
+
 // Initial status load and active tab status check
-syncActiveTabStatus();
+loadStatus().then(() => syncActiveTabStatus());
 
 // Keep status synchronized when switching tabs or when the active tab finishes updating
 chrome.tabs.onActivated.addListener(() => {

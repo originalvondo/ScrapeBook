@@ -10,9 +10,12 @@
     <main class="popup-shell">
       <!-- Compact header keeps the extension identity visible without distraction. -->
       <header class="header">
-        <div>
-          <p class="eyebrow">ScrapeBook</p>
-          <h1>Facebook Post Scanner</h1>
+        <div class="header-title-group">
+          <img class="header-icon" src="../icons/facebook.png" alt="ScrapeBook" width="28" height="28" />
+          <div>
+            <p class="eyebrow">ScrapeBook</p>
+            <h1>Facebook Post Scanner</h1>
+          </div>
         </div>
         <span class="status" id="status"><i></i>Stopped</span>
       </header>
@@ -21,6 +24,14 @@
         <div class="metric"><span>Phase</span><strong id="phase">Ready</strong></div>
         <div class="metric"><span>Posts</span><strong id="post-count">0</strong></div>
       </section>
+
+      <div class="settings-card">
+        <label class="settings-label" for="max-posts">
+          <span>Max posts</span>
+          <span class="settings-hint">(0 = unlimited)</span>
+        </label>
+        <input class="settings-input" id="max-posts" type="number" min="0" max="50000" step="1" value="100" />
+      </div>
 
       <div class="actions">
         <button class="button primary" id="start" type="button">Start scanner</button>
