@@ -5,7 +5,6 @@ const logCountElement = document.querySelector('#log-count');
 const logsElement = document.querySelector('#logs');
 const startButton = document.querySelector('#start');
 const stopButton = document.querySelector('#stop');
-const restartButton = document.querySelector('#restart');
 const exportJsonButton = document.querySelector('#export-json');
 const exportTxtButton = document.querySelector('#export-txt');
 const clearStateButton = document.querySelector('#clear-state');
@@ -86,7 +85,6 @@ function render(status = {}) {
   startButton.textContent = status.nextPostIndex > 0 ? 'Resume scanner' : 'Start scanner';
   startButton.disabled = running;
   stopButton.disabled = !running;
-  restartButton.disabled = running;
   clearStateButton.disabled = running;
 
   const logs = status.logs || [];
@@ -242,7 +240,6 @@ chrome.storage.onChanged.addListener((changes) => {
 
 startButton.addEventListener('click', () => sendToTab('START_SCAN'));
 stopButton.addEventListener('click', () => sendToTab('STOP_SCAN'));
-restartButton.addEventListener('click', () => sendToTab('RESTART_SCAN'));
 exportJsonButton.addEventListener('click', () => downloadExport('EXPORT_JSON', 'scrapebook-data.json'));
 exportTxtButton.addEventListener('click', () => downloadExport('EXPORT_TXT', 'scrapebook-data.txt'));
 clearStateButton.addEventListener('click', async () => {

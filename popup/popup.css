@@ -50,7 +50,7 @@ h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0; }
 .settings-hint { color: var(--muted); font-size: 10px; font-weight: normal; margin-top: 1px; }
 .settings-input { width: 75px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 3px; background: var(--panel-raised); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; text-align: right; outline: none; }
 .settings-input:focus { border-color: #5b9d70; }
-.actions { display: grid; grid-template-columns: 1.25fr .7fr 1fr; gap: 8px; margin-bottom: 12px; }
+.actions { display: grid; grid-template-columns: 1.5fr 1fr; gap: 8px; margin-bottom: 12px; }
 /* Export controls are separate from the scanner start/stop controls. */
 .button { min-height: 32px; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font: inherit; font-weight: 600; }
 .button.primary { border-color: #5b9d70; background: #31563d; }

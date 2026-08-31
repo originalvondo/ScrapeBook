@@ -179,18 +179,7 @@
       'Comments:',
       ...(post.comments.length
         ? [post.comments
-          .map((data, index) => {
-            let output = `${index + 1}. ${data.username}\n${data.comment}`;
-            if (data.replies && data.replies.length > 0) {
-              output += '\nReplies:';
-              data.replies.forEach((reply, ri) => {
-                const [ru, ...rl] = reply.split('\n');
-                output += `\n--- #${ri + 1} : ${ru}`;
-                output += `\n------ ${rl.join('\n').trim()}`;
-              });
-            }
-            return output;
-          })
+          .map((data, index) => `${index + 1}. ${data.username}\n${data.comment}`)
           .join('\n\n')]
         : ['(No comments found)']),
     ].join('\n')).join('\n\n----------------------------------------\n\n');
@@ -595,7 +584,7 @@
         if (!cleaned) continue;
         const [username, ...rest] = cleaned.split('\n');
         const body = rest.join('\n').trim();
-        comments.push({ username: username || 'User', comment: body || cleaned, replies: [] });
+        comments.push({ username: username || 'User', comment: body || cleaned });
       } catch (_) {}
     }
     return comments;
@@ -744,7 +733,7 @@
       completed ? 'success' : 'warning');
   }
 
-  async function start(restart = false, requestedMaxPosts = undefined) {
+  async function start(requestedMaxPosts = undefined) {
     if (state.running) { log('Already running', 'warning'); return; }
     await stateReady;
 
@@ -752,26 +741,18 @@
     if (requestedMaxPosts !== undefined) state.maxPosts = requestedMaxPosts;
     else if (saved.scrapebookMaxPosts !== undefined) state.maxPosts = saved.scrapebookMaxPosts;
 
-    if (restart) {
+    if (!scrapedPosts.length && Array.isArray(saved[SCRAPED_POSTS_KEY])) {
       scrapedPosts.length = 0;
+      scrapedPosts.push(...saved[SCRAPED_POSTS_KEY]);
       scrapedSignatures.clear();
-      state.nextPostIndex = 0;
-      state.postIndex = 0;
-      await chrome.storage.local.remove(SCRAPED_POSTS_KEY);
-    } else {
-      if (!scrapedPosts.length && Array.isArray(saved[SCRAPED_POSTS_KEY])) {
-        scrapedPosts.length = 0;
-        scrapedPosts.push(...saved[SCRAPED_POSTS_KEY]);
-        scrapedSignatures.clear();
-        for (const p of scrapedPosts) {
-          if (p.signature) scrapedSignatures.add(p.signature);
-          const fb = generatePostSignature(null, p.postContent);
-          if (fb) scrapedSignatures.add(fb);
-        }
+      for (const p of scrapedPosts) {
+        if (p.signature) scrapedSignatures.add(p.signature);
+        const fb = generatePostSignature(null, p.postContent);
+        if (fb) scrapedSignatures.add(fb);
       }
-      state.nextPostIndex = scrapedPosts.length;
-      state.postIndex = scrapedPosts.length;
     }
+    state.nextPostIndex = scrapedPosts.length;
+    state.postIndex = scrapedPosts.length;
 
     state.running = true;
     state.stopRequested = false;
@@ -798,8 +779,7 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'START_SCAN') start(false, message.maxPosts);
-    if (message.type === 'RESTART_SCAN') start(true, message.maxPosts);
+    if (message.type === 'START_SCAN') start(message.maxPosts);
     if (message.type === 'STOP_SCAN') stop();
     if (message.type === 'CLEAR_STORED_STATE') clearStoredState();
     if (message.type === 'GET_SCRAPED_POSTS') sendResponse({ posts: scrapedPosts });
