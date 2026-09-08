@@ -196,7 +196,6 @@
             id: `post-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             postNumber: postsList.length + newItems.length + 1,
             url: clean,
-            cleanUrl: clean,
             status: 'queued',
             commentsCount: 0,
             postContent: '',
@@ -552,9 +551,9 @@
         const raw = (div.innerText || '').trim();
         const cleaned = cleanComment(raw);
         if (!cleaned) continue;
-        const [username, ...rest] = cleaned.split('\n');
+        const [firstLine, ...rest] = cleaned.split('\n');
         const body = rest.join('\n').trim();
-        comments.push({ username: username || 'User', comment: body || cleaned });
+        comments.push({ comment: body || cleaned });
       } catch (_) {}
     }
     return comments;

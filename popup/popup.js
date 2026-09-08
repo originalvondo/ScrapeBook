@@ -265,18 +265,37 @@ async function handleStop() {
 }
 
 function exportAsJSON(posts) {
-  return JSON.stringify(posts, null, 2);
+  const sanitized = posts.map((post) => {
+    const { cleanUrl, cleanURL, commentsCount, ...rest } = post;
+    const sanitizedComments = Array.isArray(rest.comments)
+      ? rest.comments.map((c) => {
+          if (typeof c === 'string') return { comment: c };
+          const { username, ...cRest } = c;
+          return cRest;
+        })
+      : [];
+
+    return {
+      ...rest,
+      comments: sanitizedComments,
+    };
+  });
+
+  return JSON.stringify(sanitized, null, 2);
 }
 
 function exportAsTXT(posts) {
   return posts.map((post, index) => {
     const commentsText = Array.isArray(post.comments) && post.comments.length
-      ? post.comments.map((c, ci) => `${ci + 1}. ${c.username}\n${c.comment}`).join('\n\n')
+      ? post.comments.map((c, ci) => {
+          const text = typeof c === 'string' ? c : (c.comment || '');
+          return `${ci + 1}. ${text}`;
+        }).join('\n\n')
       : '(No comments scraped)';
 
     return [
       `Post #${index + 1}: ${post.url}`,
-      `Status: ${post.status || 'unknown'} (${post.commentsCount || 0} comments)`,
+      `Status: ${post.status || 'unknown'}`,
       '',
       'Post content:',
       post.postContent || '(No post content found)',
