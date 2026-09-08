@@ -8,7 +8,6 @@
   </head>
   <body>
     <main class="popup-shell">
-      <!-- Compact header keeps the extension identity visible without distraction. -->
       <header class="header">
         <div class="header-title-group">
           <img class="header-icon" src="../icons/facebook.png" alt="ScrapeBook" width="28" height="28" />
@@ -22,7 +21,7 @@
 
       <section class="metric-row" aria-label="Scanner status">
         <div class="metric"><span>Phase</span><strong id="phase">Ready</strong></div>
-        <div class="metric"><span>Posts</span><strong id="post-count">0</strong></div>
+        <div class="metric"><span>Progress</span><strong id="post-count">0</strong></div>
       </section>
 
       <div class="settings-card">
@@ -30,7 +29,7 @@
           <span>Max posts</span>
           <span class="settings-hint">(0 = unlimited)</span>
         </label>
-        <input class="settings-input" id="max-posts" type="number" min="0" max="50000" step="1" value="100" />
+        <input class="settings-input" id="max-posts" type="number" min="0" max="50000" step="1" value="20" />
       </div>
 
       <div class="actions">
@@ -39,16 +38,18 @@
       </div>
 
       <div class="export-actions">
-        <!-- Exports are manual so scanning never triggers an unexpected download. -->
         <button class="button secondary" id="export-json" type="button">Export JSON</button>
         <button class="button secondary" id="export-txt" type="button">Export TXT</button>
       </div>
 
-      <button class="clear-button" id="clear-state" type="button">Clear saved data</button>
+      <button class="button danger" id="clear-state" type="button">Clear saved data</button>
 
       <section class="activity">
-        <div class="section-heading"><span>Activity</span><span id="log-count">0 events</span></div>
-        <ol class="log-list" id="logs" aria-live="polite"></ol>
+        <div class="section-heading">
+          <span>Posts & Progress</span>
+          <span id="log-count">0 posts</span>
+        </div>
+        <ol class="post-list" id="posts-list" aria-live="polite"></ol>
       </section>
     </main>
     <script src="popup.js"></script>

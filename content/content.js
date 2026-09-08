@@ -5,19 +5,19 @@
   const LOG_PREFIX = '[ScrapeBook]';
   const STATUS_KEY = 'scrapebookStatus';
   const SCRAPED_POSTS_KEY = 'scrapebookPosts';
-  const MAX_LOGS = 80;
+  const MAX_LOGS = 1000;
 
+  // --- Selectors ---
   const FEED_POST_SELECTOR = 'div.x1n2onr6.xh8yej3.x1ja2u2z.xod5an3';
 
+  const POST_LINK_STRUCTURAL_SELECTOR =
+    'span > div > span > span > span > a[role="link"], span > div > span:nth-child(1) > span > span > a';
+
+  const POST_LINK_SELECTOR =
+    'a.x1i10hfl.xjbqb8w.x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x972fbf.x10w94by.x1qhh985.x14e42zd.x9f619.x1ypdohk.xt0psk2.x3ct3a4.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x16tdsg8.x1hl2dhg.xggy1nq.x1a2a7pz.xkrqix3.x1sur9pj.xi81zsa.x1s688f[role="link"]';
+
   const COMMENT_BUTTON_SELECTOR = 'div[aria-label="Leave a comment"]';
-
   const POST_DIALOG_SELECTOR = '[role="dialog"]';
-
-  const ALL_COMMENTS_TRIGGER_SELECTOR =
-    'div.x1i10hfl.xjbqb8w.x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x972fbf.x10w94by.x1qhh985.x14e42zd.x9f619.x1ypdohk.xt0psk2.x3ct3a4.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x16tdsg8.x1hl2dhg.xggy1nq.x1fmog5m.xu25z0z.x140muxe.xo1y3bh.x1n2onr6.x87ps6o.x1lku1pv.x1a2a7pz';
-
-  const ALL_COMMENTS_BUTTON_SELECTOR =
-    'div.x1i10hfl.xjbqb8w.x1ejq31n.x18oe1m7.x1sy0etr.xstzfhl.x972fbf.x10w94by.x1qhh985.x14e42zd.x3ct3a4.x1hl2dhg.xggy1nq.x1fmog5m.xu25z0z.x140muxe.xo1y3bh.x87ps6o.x1lku1pv.x1a2a7pz.xjyslct.x9f619.x1ypdohk.x78zum5.x1q0g3np.x2lah0s.x1i6fsjq.xfvfia3.x8e7100.x1a16bkn.x10wwi4t.x1x7e7qh.xgm7xcn.x1ynn3ck.x1n2onr6.x16tdsg8.x1ja2u2z.x6s0dn4[role="menuitem"]';
 
   const REPLIES_BUTTON_SELECTOR =
     'div.x1i10hfl.xjbqb8w.xjqpnuy.xc5r6h4.xqeqjp1.x1phubyo.x13fuv20.x18b5jzi.x1q0q8m5.x1t7ytsu.x972fbf.x10w94by.x1qhh985.x14e42zd.x9f619.x1ypdohk.xdl72j9.x3ct3a4.xdj266r.x14z9mp.xat24cr.x1lziwak.x2lwn1j.xeuugli.xexx8yu.x18d9i69.x1c1uobl.x1n2onr6.x16tdsg8.x1hl2dhg.xggy1nq.x1ja2u2z.x1t137rt.x1fmog5m.xu25z0z.x140muxe.xo1y3bh.x3nfvp2.x87ps6o.x1lku1pv.x1a2a7pz.x6s0dn4.xi81zsa.x1q0g3np.x1iyjqo2.xs83m0k.x1icxu4v[role="button"]';
@@ -26,7 +26,7 @@
     'div.html-div.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1gslohp';
 
   const POST_CONTENT_CONTAINER_SELECTOR =
-    '.__fb-dark-mode.x1n2onr6.x1vjfegm div[data-ad-rendering-role="story_message"].html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl';
+    'div[data-ad-rendering-role="story_message"], div[data-ad-preview="message"], .userContent';
 
   const POST_TEXT_BLOCK_SELECTOR =
     'div.html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl';
@@ -37,69 +37,23 @@
   const COMMENT_DIV_SELECTOR = 'div.x1nn3v0j.x1120s5i.x135b78x.x11lfxj5';
   const COMMENT_FALLBACK_SELECTOR = 'div[aria-label*="comment by" i], div[role="article"]';
 
-  // multi-lang "all comments" labels
-  const ALL_COMMENTS_TEXTS = [
-    'all comments', 'সকল মন্তব্য', 'সব মন্তব্য',
-    'todos los comentarios', 'tous les commentaires',
-    'alle kommentare', 'सभी टिप्पणियाँ',
-  ];
-
-  // possible labels on the comment filter dropdown button
-  const FILTER_TRIGGER_TEXTS = [
-    'most relevant', 'top comments', 'all comments', 'newest',
-    'সবচেয়ে প্রাসঙ্গিক', 'সকল মন্তব্য', 'más relevantes',
-    'plus pertinents', 'alle kommentare',
-  ];
-
-  const scrapedPosts = [];
-  const scrapedSignatures = new Set();
-
-  const state = {
-    running: false,
-    phase: 'Ready',
-    postIndex: 0,
-    nextPostIndex: 0,
-    maxPosts: 100,
-    logs: [],
-    startedAt: null,
-    stopRequested: false,
-  };
+  const seenUrls = new Set();
+  let collectorRunning = false;
+  let collectorStopRequested = false;
 
   function wait(ms) {
     return new Promise(r => setTimeout(r, ms));
   }
 
-  function log(message, level = 'info') {
-    const entry = { message, level, timestamp: new Date().toISOString() };
-    console.log(`${LOG_PREFIX} [${level.toUpperCase()}] ${message}`);
-    state.logs = [...state.logs, entry].slice(-MAX_LOGS);
-    writeStatus();
+  function isElementVisible(el) {
+    if (!el) return false;
+    if (typeof el.checkVisibility === 'function') {
+      return el.checkVisibility();
+    }
+    const rect = el.getBoundingClientRect();
+    return (rect.width > 0 || rect.height > 0) && window.getComputedStyle(el).display !== 'none';
   }
 
-  function writeStatus() {
-    chrome.storage.local.set({
-      [STATUS_KEY]: {
-        running: state.running,
-        phase: state.phase,
-        postIndex: state.postIndex,
-        nextPostIndex: state.nextPostIndex,
-        maxPosts: state.maxPosts,
-        logs: state.logs,
-        startedAt: state.startedAt,
-      },
-    });
-  }
-
-  function setPhase(phase) {
-    state.phase = phase;
-    writeStatus();
-  }
-
-  function persistScrapedPosts() {
-    chrome.storage.local.set({ [SCRAPED_POSTS_KEY]: scrapedPosts });
-  }
-
-  // .click() alone doesn't always work on FB, so we fire the full pointer/mouse sequence too
   function robustClick(el) {
     if (!el) return;
     try { el.scrollIntoView({ behavior: 'auto', block: 'nearest' }); } catch (_) {}
@@ -111,341 +65,226 @@
     }
   }
 
-  function generatePostSignature(article, postContent = '') {
-    if (!article && !postContent) return '';
-    if (article) {
-      const linkEl = article.querySelector(
-        'a[href*="/permalink/"], a[href*="/posts/"], a[href*="story_fbid="], a[href*="/groups/"][href*="permalink"]'
-      );
-      if (linkEl && linkEl.href) {
-        try { const url = new URL(linkEl.href); return `${url.origin}${url.pathname}`; }
-        catch { return linkEl.href; }
+  function getCleanUrl(raw) {
+    if (!raw) return '';
+    try {
+      const u = new URL(raw);
+      if (u.searchParams.has('story_fbid')) {
+        const fbid = u.searchParams.get('story_fbid');
+        const id = u.searchParams.get('id');
+        return `${u.origin}${u.pathname}?story_fbid=${fbid}${id ? `&id=${id}` : ''}`;
       }
+      return `${u.origin}${u.pathname}`.replace(/\/+$/, '/');
+    } catch {
+      return (raw.split('?')[0] || raw).trim();
     }
-    const authorEl = article ? article.querySelector('h2, h3, h4, strong, a[role="link"]') : null;
-    const author = authorEl ? authorEl.textContent.trim().slice(0, 40) : '';
-    const text = (postContent || (article ? article.innerText : '') || '').slice(0, 140).replace(/\s+/g, ' ').trim();
-    if (author || text) return `${author}::${text}`;
-    return '';
   }
 
-  async function restoreStoredState() {
-    const saved = await chrome.storage.local.get([STATUS_KEY, SCRAPED_POSTS_KEY, 'scrapebookMaxPosts']);
-    const savedStatus = saved[STATUS_KEY] || {};
-    if (Array.isArray(saved[SCRAPED_POSTS_KEY])) {
-      scrapedPosts.length = 0;
-      scrapedPosts.push(...saved[SCRAPED_POSTS_KEY]);
-      scrapedSignatures.clear();
-      for (const p of scrapedPosts) {
-        if (p.signature) scrapedSignatures.add(p.signature);
-        const fb = generatePostSignature(null, p.postContent);
-        if (fb) scrapedSignatures.add(fb);
-      }
-    }
-    state.maxPosts = saved.scrapebookMaxPosts !== undefined ? saved.scrapebookMaxPosts : (savedStatus.maxPosts || 100);
-    state.nextPostIndex = scrapedPosts.length;
-    state.postIndex = scrapedPosts.length;
-    state.logs = Array.isArray(savedStatus.logs) ? savedStatus.logs : [];
-    state.startedAt = savedStatus.startedAt || null;
-    state.phase = state.nextPostIndex > 0 ? 'Ready to resume' : 'Ready';
-  }
-
-  const stateReady = restoreStoredState().then(() => writeStatus());
-
-  async function clearStoredState() {
-    if (state.running) return;
-    scrapedPosts.length = 0;
-    scrapedSignatures.clear();
-    state.postIndex = 0;
-    state.nextPostIndex = 0;
-    state.logs = [];
-    state.startedAt = null;
-    state.phase = 'Ready';
-    await chrome.storage.local.remove([STATUS_KEY, SCRAPED_POSTS_KEY]);
-    writeStatus();
-  }
-
-  function exportAsJSON(posts) {
-    return JSON.stringify(posts, null, 2);
-  }
-
-  function exportAsTXT(posts) {
-    return posts.map((post) => [
-      `Post ${post.postNumber}`,
-      '',
-      'Post content:',
-      post.postContent || '(No post content found)',
-      '',
-      'Comments:',
-      ...(post.comments.length
-        ? [post.comments
-          .map((data, index) => `${index + 1}. ${data.username}\n${data.comment}`)
-          .join('\n\n')]
-        : ['(No comments found)']),
-    ].join('\n')).join('\n\n----------------------------------------\n\n');
+  function isPostUrl(href) {
+    if (!href) return false;
+    return (
+      href.includes('/posts/') ||
+      href.includes('/permalink/') ||
+      href.includes('story_fbid=') ||
+      href.includes('/permalink.php')
+    );
   }
 
   function getFeedPosts() {
-    return [...document.querySelectorAll(FEED_POST_SELECTOR)]
-      .filter(el => el.offsetParent !== null);
+    let posts = [...document.querySelectorAll(FEED_POST_SELECTOR)]
+      .filter(el => isElementVisible(el));
+    if (!posts.length) {
+      posts = [...document.querySelectorAll('div[role="feed"] > div, [role="feed"] [role="article"]')]
+        .filter(el => isElementVisible(el));
+    }
+    return posts;
   }
 
-  function findCommentButton(article) {
-    if (!article) return null;
+  // Generic extractor combining structural path, class selector, and URL patterns
+  function extractAllPostLinks() {
+    const found = [];
 
-    // try the exact selector first
-    const specific = article.querySelector(COMMENT_BUTTON_SELECTOR);
-    if (specific && specific.offsetParent !== null) return specific;
+    const tryAdd = (el) => {
+      if (!el || !el.href) return;
+      const href = el.href;
+      if (isPostUrl(href) && !found.includes(href)) {
+        found.push(href);
+      }
+    };
 
-    // aria-label fallback (handles multiple languages)
-    const ariaMatches = article.querySelectorAll(
-      'div[aria-label*="comment" i], div[aria-label*="Comment" i], div[aria-label*="মন্তব্য" i], div[aria-label*="comentario" i], div[aria-label*="commentaire" i]'
+    // 1. Structural selector from user's inspected DOM path:
+    // ... > span > div > span:nth-child(1) > span > span > a
+    const structuralMatches = document.querySelectorAll(POST_LINK_STRUCTURAL_SELECTOR);
+    for (const a of structuralMatches) tryAdd(a);
+
+    // 2. Classname and role attribute selector
+    try {
+      const classMatches = document.querySelectorAll(POST_LINK_SELECTOR);
+      for (const a of classMatches) tryAdd(a);
+    } catch (_) {}
+
+    // 3. Search inside each feed post container
+    const posts = getFeedPosts();
+    for (const post of posts) {
+      const link = post.querySelector(
+        'span > div > span > span > span > a, span > div > span:nth-child(1) > span > span > a, a[role="link"][href*="/posts/"], a[role="link"][href*="/permalink/"], a[href*="/posts/"], a[href*="/permalink/"]'
+      );
+      tryAdd(link);
+    }
+
+    // 4. Any anchor matching group post URLs
+    const directLinks = document.querySelectorAll(
+      'a[role="link"][href*="/posts/"], a[role="link"][href*="/permalink/"], a[role="link"][href*="story_fbid="], a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="]'
     );
-    for (const btn of ariaMatches) {
-      if (btn.offsetParent !== null) return btn;
-    }
+    for (const a of directLinks) tryAdd(a);
 
-    // last resort: look for "12 comments" style text
-    const links = article.querySelectorAll('a[role="link"], span, div[role="button"]');
-    for (const el of links) {
-      if (el.offsetParent === null) continue;
-      const text = (el.textContent || '').trim().toLowerCase();
-      if (/\d+\s*(?:comments|comment|মন্তব্য|comentarios|commentaires)/i.test(text)) {
-        return el.closest('[role="button"], a') || el;
-      }
-    }
-
-    return null;
+    return found;
   }
 
-  async function openPost(article) {
-    // bring it on screen first
-    article.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    await wait(500);
+  // ==========================================
+  // STAGE 1: Fast Group Feed Link Collector
+  // ==========================================
+  async function runLinkCollector(requestedMaxPosts = 100) {
+    if (collectorRunning) return;
+    collectorRunning = true;
+    collectorStopRequested = false;
 
-    const btn = findCommentButton(article);
-    if (!btn) {
-      log('No comment button found on this post', 'warning');
-      return false;
+    // Hydrate existing posts from storage
+    const storageData = await chrome.storage.local.get([STATUS_KEY, SCRAPED_POSTS_KEY]);
+    const existingPosts = Array.isArray(storageData[SCRAPED_POSTS_KEY]) ? storageData[SCRAPED_POSTS_KEY] : [];
+    seenUrls.clear();
+    for (const p of existingPosts) {
+      const url = p.cleanUrl || getCleanUrl(p.url || p);
+      if (url) seenUrls.add(url);
     }
 
-    log('Clicking comment button to open post');
-    robustClick(btn);
+    const postsList = [...existingPosts];
+    const maxPosts = requestedMaxPosts > 0 ? requestedMaxPosts : 10000;
 
-    // wait for the dialog to show up
-    for (let t = 0; t < 60; t++) {
-      if (document.querySelector(POST_DIALOG_SELECTOR)) {
-        log('Dialog opened', 'success');
-        return true;
+    await chrome.storage.local.set({
+      [STATUS_KEY]: {
+        running: true,
+        stage: 'collecting_links',
+        phase: `Collecting post links (${postsList.length}/${maxPosts === 10000 ? '∞' : maxPosts})...`,
+        postIndex: postsList.length,
+        scrapedIndex: postsList.filter(p => p.status === 'done').length,
+        maxPosts: requestedMaxPosts,
       }
-      await wait(100);
-    }
+    });
 
-    // didn't work, try again
-    log('Dialog did not appear, retrying click', 'warning');
-    robustClick(btn);
-    for (let t = 0; t < 40; t++) {
-      if (document.querySelector(POST_DIALOG_SELECTOR)) {
-        log('Dialog opened on retry', 'success');
-        return true;
-      }
-      await wait(100);
-    }
+    let consecutiveEmptyScrolls = 0;
+    const SCROLL_STEP = Math.max(1400, Math.round(window.innerHeight * 1.5));
+    const FAST_WAIT = 250;
 
-    log('Failed to open post dialog', 'error');
-    return false;
-  }
-
-  function getScrollableSection() {
-    // try the exact selector
-    const specific = document.querySelector(POST_SCROLLABLE_SECTION_SELECTOR);
-    if (specific && specific.offsetParent !== null) return specific;
-
-    // otherwise look for any scrollable div in the dialog
-    const dialog = document.querySelector(POST_DIALOG_SELECTOR);
-    if (!dialog) return null;
-
-    const divs = dialog.querySelectorAll('div');
-    for (const d of divs) {
-      try {
-        const s = window.getComputedStyle(d);
-        if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && d.scrollHeight > d.clientHeight && d.clientHeight > 100) {
-          return d;
-        }
-      } catch (_) {}
-    }
-
-    return dialog;
-  }
-
-  // looks for the comment filter dropdown button ("Most relevant", "Newest", etc.)
-  function findFilterTrigger() {
-    const dialog = document.querySelector(POST_DIALOG_SELECTOR);
-    const root = dialog || document;
-
-    // exact selector
-    const specific = root.querySelector(ALL_COMMENTS_TRIGGER_SELECTOR);
-    if (specific && specific.offsetParent !== null) return specific;
-
-    // elements with aria-haspopup="menu" are almost always the filter dropdown
-    const haspopup = root.querySelectorAll('div[aria-haspopup="menu"], span[aria-haspopup="menu"]');
-    for (const el of haspopup) {
-      if (el.offsetParent === null) continue;
-      const text = (el.textContent || '').trim().toLowerCase();
-      // filter buttons have short labels, skip anything with long text (it's probably a container)
-      if (text.length <= 60 && FILTER_TRIGGER_TEXTS.some(t => text.includes(t))) {
-        return el;
-      }
-    }
-
-    // widen the search to button-like elements, but still skip big containers
-    const candidates = root.querySelectorAll(
-      'div[role="button"], div[tabindex="0"], span[role="button"]'
-    );
-    for (const el of candidates) {
-      if (el.offsetParent === null) continue;
-      if (el.closest('[role="menu"]')) continue;
-      const text = (el.textContent || '').trim().toLowerCase();
-      // skip elements with too much text — they're containers, not buttons
-      if (text.length > 60) continue;
-      if (FILTER_TRIGGER_TEXTS.some(t => text.includes(t))) {
-        return el;
-      }
-    }
-
-    // broadest fallback: any clickable-ish element with an exact text match
-    const broad = root.querySelectorAll('div.x1i10hfl, span');
-    for (const el of broad) {
-      if (el.offsetParent === null) continue;
-      if (el.closest('[role="menu"]')) continue;
-      const text = (el.textContent || '').trim().toLowerCase();
-      if (text.length > 40) continue;
-      if (FILTER_TRIGGER_TEXTS.some(t => text === t)) {
-        return el.closest('[role="button"], div[aria-haspopup="menu"], div[tabindex="0"], div.x1i10hfl') || el;
-      }
-    }
-
-    return null;
-  }
-
-  // after the filter dropdown opens, find and return the "All comments" menu item
-  function findAllCommentsMenuItem() {
-    // try exact selector
-    const items = document.querySelectorAll(ALL_COMMENTS_BUTTON_SELECTOR);
-    for (const item of items) {
-      if (item.offsetParent === null) continue;
-      const text = (item.innerText || '').trim().toLowerCase();
-      if (ALL_COMMENTS_TEXTS.some(t => text.startsWith(t))) {
-        return item;
-      }
-    }
-
-    // fallback: any visible menuitem that says "all comments"
-    const allMenuItems = document.querySelectorAll('[role="menuitem"]');
-    for (const item of allMenuItems) {
-      if (item.offsetParent === null) continue;
-      const text = (item.innerText || '').trim().toLowerCase();
-      if (ALL_COMMENTS_TEXTS.some(t => text.startsWith(t))) {
-        return item;
-      }
-    }
-
-    return null;
-  }
-
-  async function tryClickAllComments() {
-    log('Checking if "All comments" filter exists...');
-
-    // poll for up to 5s waiting for the filter trigger to appear
-    const TRIGGER_TIMEOUT = 5000;
-    const TRIGGER_POLL_INTERVAL = 200;
-    let trigger = null;
-    const triggerStart = Date.now();
-
-    while (Date.now() - triggerStart < TRIGGER_TIMEOUT) {
-      trigger = findFilterTrigger();
-      if (trigger) {
-        log(`Filter trigger found after ${Date.now() - triggerStart}ms`);
+    while (!collectorStopRequested) {
+      if (maxPosts > 0 && postsList.length >= maxPosts) {
         break;
       }
-      await wait(TRIGGER_POLL_INTERVAL);
-    }
 
-    if (!trigger) {
-      // still not visible — try scrolling the dialog down a bit to reveal it
-      log('Filter trigger not visible after timeout, scrolling dialog down a bit to find it');
-      const scrollable = getScrollableSection();
-      if (scrollable) {
-        for (let i = 0; i < 5; i++) {
-          scrollable.scrollBy({ top: 300, behavior: 'smooth' });
-          await wait(400);
-          trigger = findFilterTrigger();
-          if (trigger) {
-            log('Found filter trigger after scrolling');
-            break;
-          }
+      // Collect links from visible posts
+      const visibleLinks = extractAllPostLinks();
+      const newItems = [];
+
+      for (const href of visibleLinks) {
+        if (collectorStopRequested) break;
+        if (maxPosts > 0 && (postsList.length + newItems.length) >= maxPosts) break;
+
+        const clean = getCleanUrl(href);
+        if (!seenUrls.has(clean)) {
+          seenUrls.add(clean);
+          newItems.push({
+            id: `post-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            postNumber: postsList.length + newItems.length + 1,
+            url: clean,
+            cleanUrl: clean,
+            status: 'queued',
+            commentsCount: 0,
+            postContent: '',
+            comments: [],
+          });
         }
       }
+
+      if (newItems.length > 0) {
+        postsList.push(...newItems);
+        consecutiveEmptyScrolls = 0;
+
+        await chrome.storage.local.set({
+          [SCRAPED_POSTS_KEY]: postsList,
+          [STATUS_KEY]: {
+            running: true,
+            stage: 'collecting_links',
+            phase: `Collecting post links (${postsList.length}/${maxPosts === 10000 ? '∞' : maxPosts})...`,
+            postIndex: postsList.length,
+            scrapedIndex: postsList.filter(p => p.status === 'done').length,
+            maxPosts: requestedMaxPosts,
+          }
+        });
+      } else {
+        consecutiveEmptyScrolls++;
+        if (consecutiveEmptyScrolls >= 25) {
+          // Reached end of feed
+          break;
+        }
+      }
+
+      if (maxPosts > 0 && postsList.length >= maxPosts) {
+        break;
+      }
+
+      // Scroll the feed down
+      window.scrollBy({ top: SCROLL_STEP, behavior: 'auto' });
+      await wait(newItems.length > 0 ? FAST_WAIT : FAST_WAIT + 150);
     }
 
-    if (!trigger) {
-      log('No comment filter trigger found — skipping "All comments" step', 'warning');
-      return;
+    collectorRunning = false;
+    const completed = !collectorStopRequested && postsList.length > 0;
+
+    await chrome.storage.local.set({
+      [SCRAPED_POSTS_KEY]: postsList,
+      [STATUS_KEY]: {
+        running: completed, // if completed collecting, keep running for stage 2
+        stage: completed ? 'ready_for_scrape' : 'stopped',
+        phase: completed ? `Link collection done (${postsList.length} links). Starting post scraper...` : 'Stopped',
+        postIndex: postsList.length,
+        scrapedIndex: postsList.filter(p => p.status === 'done').length,
+        maxPosts: requestedMaxPosts,
+      }
+    });
+
+    // Notify background service worker to begin scraping the posts queue
+    if (completed) {
+      chrome.runtime.sendMessage({ type: 'START_POSTS_SCRAPING' }).catch(() => {});
     }
-
-    // already set to "All comments"? nothing to do
-    const triggerText = (trigger.textContent || '').trim().toLowerCase();
-    if (ALL_COMMENTS_TEXTS.some(t => triggerText.includes(t))) {
-      log('"All comments" is already active');
-      return;
-    }
-
-    log('Clicking filter trigger to open dropdown');
-    robustClick(trigger);
-    await wait(500);
-
-    let menuItem = null;
-    for (let t = 0; t < 30; t++) {
-      menuItem = findAllCommentsMenuItem();
-      if (menuItem) break;
-      await wait(100);
-    }
-
-    if (!menuItem) {
-      log('"All comments" menuitem not found — dismissing menu', 'warning');
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
-      await wait(300);
-      return;
-    }
-
-    log('Found "All comments" menuitem, clicking it');
-    robustClick(menuItem);
-    await wait(1000);
-    log('Switched to "All comments"', 'success');
   }
 
+  function stopLinkCollector() {
+    collectorStopRequested = true;
+    collectorRunning = false;
+  }
+
+  // ====================================================
+  // STAGE 2: Standalone Post Scraper (Runs on Post Tab)
+  // ====================================================
+
   function countComments() {
-    const container = document.querySelector(COMMENTS_CONTAINER_SELECTOR)
-      || document.querySelector(POST_DIALOG_SELECTOR)
-      || document;
-    let divs = container.querySelectorAll(COMMENT_DIV_SELECTOR);
-    if (!divs.length) divs = container.querySelectorAll(COMMENT_FALLBACK_SELECTOR);
+    let divs = document.querySelectorAll(COMMENT_DIV_SELECTOR);
+    if (!divs.length) divs = document.querySelectorAll(COMMENT_FALLBACK_SELECTOR);
     return divs.length;
   }
 
-  // clicks any "View more comments" / "View previous comments" buttons it can find
   function clickViewMoreComments() {
-    const dialog = document.querySelector(POST_DIALOG_SELECTOR) || document;
-    const buttons = dialog.querySelectorAll('div[role="button"], span, div.x1i10hfl');
+    const buttons = document.querySelectorAll('div[role="button"], span, div.x1i10hfl');
     let clicked = false;
     for (const btn of buttons) {
-      if (btn.offsetParent === null) continue;
+      if (!isElementVisible(btn)) continue;
       const text = (btn.textContent || '').trim().toLowerCase();
       if (
         text.includes('view more comments') ||
         text.includes('view previous comments') ||
         (text.includes('view ') && text.includes('more comments')) ||
         text.includes('আরও মন্তব্য') ||
+        text.includes('পূর্ববর্তী মন্তব্য') ||
         text.includes('ver más comentarios') ||
         text.includes('afficher plus de commentaires') ||
         text.includes('weitere kommentare')
@@ -458,124 +297,255 @@
   }
 
   async function scrollUntilNoNewComments() {
-    log('Scrolling to load all comments...');
-    setPhase('Loading comments');
-
-    const scrollable = getScrollableSection();
-    if (!scrollable) {
-      log('No scrollable section found', 'warning');
-      return;
-    }
-
     let lastCount = countComments();
     let stagnant = 0;
 
-    for (let cycle = 0; cycle < 80; cycle++) {
-      if (state.stopRequested) break;
-
-      // try loading more comments if the button is there
+    for (let cycle = 0; cycle < 30; cycle++) {
       clickViewMoreComments();
-
-      // keep scrolling
-      scrollable.scrollBy({ top: 500, behavior: 'auto' });
+      window.scrollBy({ top: 700, behavior: 'auto' });
       await wait(300);
 
       const newCount = countComments();
-      const atBottom = scrollable.scrollTop + scrollable.clientHeight >= scrollable.scrollHeight - 50;
+      const atBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
 
       if (newCount > lastCount) {
         stagnant = 0;
         lastCount = newCount;
-        log(`Comments loaded so far: ${newCount}`);
       } else if (atBottom) {
         stagnant++;
-        if (stagnant >= 3) {
-          log(`No new comments loading, total: ${newCount}`, 'success');
-          break;
-        }
+        if (stagnant >= 3) break;
       }
     }
   }
 
   async function expandAllReplies() {
-    log('Expanding reply threads...');
-    const dialog = document.querySelector(POST_DIALOG_SELECTOR) || document;
-
-    for (let pass = 0; pass < 10; pass++) {
-      if (state.stopRequested) break;
-
+    for (let pass = 0; pass < 8; pass++) {
       let clicked = 0;
-
-      // exact selector for reply buttons
-      const repliesButtons = dialog.querySelectorAll(REPLIES_BUTTON_SELECTOR);
+      const repliesButtons = document.querySelectorAll(REPLIES_BUTTON_SELECTOR);
       for (const btn of repliesButtons) {
-        if (btn.offsetParent !== null) {
+        if (isElementVisible(btn)) {
           robustClick(btn);
           clicked++;
         }
       }
 
-      // text-based fallback
-      const textBtns = dialog.querySelectorAll('div[role="button"], span, div.x1i10hfl');
+      const textBtns = document.querySelectorAll('div[role="button"], span, div.x1i10hfl');
       for (const btn of textBtns) {
-        if (btn.offsetParent === null) continue;
+        if (!isElementVisible(btn)) continue;
         const text = (btn.textContent || '').trim().toLowerCase();
         if (
           /\b\d+\s*(?:replies|reply|উত্তর|respuestas|réponses|antworten)\b/i.test(text) ||
           text.includes('view reply') ||
           text.includes('view replies') ||
-          (text.includes('view ') && text.includes('replies'))
+          text.includes('টি উত্তর')
         ) {
           robustClick(btn.closest('[role="button"], div[tabindex="0"], div.x1i10hfl') || btn);
           clicked++;
         }
       }
 
-      if (clicked === 0) {
-        log('No more reply buttons found');
-        break;
-      }
-
-      log(`Clicked ${clicked} reply buttons, waiting for them to load...`);
-      await wait(800);
-
-      // scroll down so freshly loaded replies come into view
-      const scrollable = getScrollableSection();
-      if (scrollable) scrollable.scrollBy({ top: 300, behavior: 'auto' });
-      await wait(300);
+      if (clicked === 0) break;
+      await wait(600);
+      window.scrollBy({ top: 300, behavior: 'auto' });
+      await wait(250);
     }
   }
 
-  function extractPostContent() {
-    const container = document.querySelector(POST_CONTENT_CONTAINER_SELECTOR);
-    if (!container) return '';
-    return container.innerText.trim();
+  function getTargetPostId() {
+    const url = window.location.href;
+    const match = url.match(/\/posts\/(\d+)/) || url.match(/\/permalink\/(\d+)/) || url.match(/story_fbid=(\d+)/);
+    return match ? match[1] : null;
   }
 
+  function getTargetPostElement() {
+    const postId = getTargetPostId();
+
+    // 1. Explicitly locate the article containing the link with this post ID
+    if (postId) {
+      const matchingLinks = document.querySelectorAll(`a[href*="${postId}"]`);
+      for (const link of matchingLinks) {
+        const article = link.closest('div[role="article"], div[data-pagelet*="FeedUnit"], div.x1n2onr6.xh8yej3');
+        if (article) return article;
+      }
+    }
+
+    // 2. Primary post article inside role="main"
+    const roleMain = document.querySelector('div[role="main"]');
+    if (roleMain) {
+      const firstArticle = roleMain.querySelector('div[role="article"]');
+      if (firstArticle) return firstArticle;
+      return roleMain;
+    }
+
+    // 3. Fallback to first article in document
+    const firstArticle = document.querySelector('div[role="article"]');
+    if (firstArticle) return firstArticle;
+
+    return document.body;
+  }
+
+  async function expandPostContent(targetPost) {
+    const root = targetPost || document;
+    const candidates = root.querySelectorAll(
+      'div[role="button"], span[role="button"], div[tabindex="0"], div.x1i10hfl, span.x1i10hfl'
+    );
+    for (const btn of candidates) {
+      if (btn.closest(COMMENT_DIV_SELECTOR) || btn.closest(COMMENT_FALLBACK_SELECTOR)) continue;
+      if (btn.closest('[aria-label*="comment" i]') || btn.closest('[aria-label*="reply" i]') || btn.closest('[aria-label*="মন্তব্য" i]')) continue;
+      if (btn.closest('ul')) continue;
+
+      const text = (btn.textContent || '').trim().toLowerCase();
+      if (
+        text === 'see more' ||
+        text === 'আরও দেখুন' ||
+        text === 'ver más' ||
+        text === 'afficher la suite' ||
+        text === 'mehr anzeigen' ||
+        text.includes('see more') ||
+        text.includes('আরও দেখুন')
+      ) {
+        robustClick(btn);
+        await wait(350);
+      }
+    }
+  }
+
+  function cleanPostContent(raw) {
+    if (!raw) return '';
+    return raw
+      .replace(/\s*(?:\.{3}|…)?\s*(?:See more|আরও দেখুন|Ver más|Afficher la suite|Mehr anzeigen)\s*$/iu, '')
+      .trim();
+  }
+
+  async function extractPostContent() {
+    const targetPost = getTargetPostElement();
+    if (!targetPost) return '';
+
+    await expandPostContent(targetPost);
+
+    // 1. Explicit story message attributes scoped strictly to targetPost
+    const explicitSelectors = [
+      'div[data-ad-rendering-role="story_message"]',
+      'div[data-ad-preview="message"]',
+      'div[data-ad-comet-preview="message"]',
+      'div[data-testid="post_message"]',
+      '.userContent',
+    ];
+
+    for (const sel of explicitSelectors) {
+      try {
+        const el = targetPost.querySelector(sel);
+        if (el && el.innerText && el.innerText.trim()) {
+          const cleaned = cleanPostContent(el.innerText);
+          if (cleaned) return cleaned;
+        }
+      } catch (_) {}
+    }
+
+    // 2. Structural extraction: locate message blocks before actionRow inside targetPost
+    try {
+      const actionRow = targetPost.querySelector(
+        'div[aria-label="Leave a comment"], div[aria-label="Comment"], div[aria-label="মন্তব্য করুন"], div[role="toolbar"], div[aria-label*="reaction" i], div[aria-label*="Like" i], div[aria-label*="পছন্দ" i], form[role="presentation"]'
+      );
+
+      const candidates = targetPost.querySelectorAll('div[dir="auto"], span[dir="auto"]');
+      const validTexts = [];
+
+      for (const el of candidates) {
+        // Must not be within comments
+        if (el.closest(COMMENT_DIV_SELECTOR) || el.closest(COMMENT_FALLBACK_SELECTOR)) continue;
+        if (el.closest('[aria-label*="comment" i]') || el.closest('[aria-label*="reply" i]') || el.closest('[aria-label*="মন্তব্য" i]')) continue;
+        if (el.closest('ul')) continue;
+
+        // Must appear before the interaction/actions row in DOM
+        if (actionRow && (actionRow.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) === 0) {
+          continue;
+        }
+
+        // Must not be an author link, header, button, or group/shared label
+        if (el.closest('a[role="link"], button, [role="button"], h1, h2, h3, h4')) continue;
+        if (el.closest('[aria-label*="Shared with" i], [aria-label*="actions for this post" i]')) continue;
+
+        const text = cleanPostContent((el.innerText || '').trim());
+        if (!text || text.length < 2) continue;
+
+        // Deduplicate overlapping parent/child blocks
+        if (validTexts.some(existing => existing.includes(text) || text.includes(existing))) {
+          const idx = validTexts.findIndex(existing => existing.includes(text) || text.includes(existing));
+          if (idx !== -1 && text.length > validTexts[idx].length) {
+            validTexts[idx] = text;
+          }
+          continue;
+        }
+
+        validTexts.push(text);
+      }
+
+      if (validTexts.length > 0) {
+        return validTexts.join('\n\n');
+      }
+    } catch (_) {}
+
+    return '';
+  }
+
+  const REPLY_ACTION_WORDS = [
+    'reply', 'উত্তর দিন', 'responder', 'répondre', 'antworten', 'rispondi', 'ответить'
+  ];
+
   function cleanComment(raw) {
-    const replyIdx = raw.lastIndexOf('Reply');
-    const beforeActions = replyIdx === -1 ? raw : raw.slice(0, replyIdx);
+    if (!raw) return '';
+    let text = raw;
+
+    let minIdx = -1;
+    for (const word of REPLY_ACTION_WORDS) {
+      const idx = text.toLowerCase().lastIndexOf(word);
+      if (idx !== -1 && (minIdx === -1 || idx > minIdx)) {
+        minIdx = idx;
+      }
+    }
+    if (minIdx !== -1) {
+      text = text.slice(0, minIdx);
+    }
+
     const timePattern = /^\s*[\d০-৯]+(?:\s*[smhdw]|\s*(?:মিনিট|ঘণ্টা|ঘন্টা|দিন|সপ্তাহ|মাস|বছর))\s*$/iu;
-    const lines = beforeActions.split('\n');
+    const lines = text.split('\n');
     const giphyIdx = lines.findIndex(l => l.trim().toLowerCase() === 'giphy');
     const visible = giphyIdx === -1 ? lines : lines.slice(0, giphyIdx);
+
     return visible
       .map(l => l.trim())
-      .filter(l => l && l !== '·' && l !== '.' && l.toLowerCase() !== 'follow' && !timePattern.test(l))
+      .filter(l => (
+        l &&
+        l !== '·' &&
+        l !== '.' &&
+        l.toLowerCase() !== 'follow' &&
+        l.toLowerCase() !== 'top fan' &&
+        l.toLowerCase() !== 'শীর্ষ ফ্যান' &&
+        !timePattern.test(l)
+      ))
       .join('\n')
       .trim();
   }
 
   function extractComments() {
-    const container =
-      document.querySelector(COMMENTS_CONTAINER_SELECTOR) ||
-      document.querySelector(POST_DIALOG_SELECTOR) ||
-      document;
-    if (!container) return [];
+    const targetPost = getTargetPostElement();
+    const scope = targetPost || document;
 
     const comments = [];
-    let divs = container.querySelectorAll(COMMENT_DIV_SELECTOR);
-    if (!divs.length) divs = container.querySelectorAll(COMMENT_FALLBACK_SELECTOR);
+    let divs = [...scope.querySelectorAll(COMMENT_DIV_SELECTOR)];
+    if (!divs.length) {
+      divs = [...scope.querySelectorAll(COMMENT_FALLBACK_SELECTOR)];
+    }
+
+    // Fallback: if comments are located in a sibling section under role="main"
+    if (!divs.length && targetPost !== document.body) {
+      const roleMain = document.querySelector('div[role="main"]');
+      if (roleMain) {
+        divs = [...roleMain.querySelectorAll(COMMENT_DIV_SELECTOR)];
+        if (!divs.length) divs = [...roleMain.querySelectorAll(COMMENT_FALLBACK_SELECTOR)];
+      }
+    }
 
     for (const div of divs) {
       try {
@@ -590,209 +560,77 @@
     return comments;
   }
 
-  async function closeDialog() {
-    if (!document.querySelector(POST_DIALOG_SELECTOR)) return;
+  async function scrapeStandalonePost() {
+    try {
+      // 1. Ensure at top of page and wait for React hydration
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      await wait(1500);
 
-    log('Closing dialog (pressing Escape)');
-    window.dispatchEvent(new KeyboardEvent('keydown', {
-      key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true,
-    }));
-    await wait(500);
+      // 2. Extract post content immediately while mounted at top of page
+      let postContent = await extractPostContent();
 
-    // did it close?
-    if (!document.querySelector(POST_DIALOG_SELECTOR)) {
-      log('Dialog closed', 'success');
-      return;
-    }
-
-    // nope — try the close button instead
-    log('Dialog still open, clicking close button', 'warning');
-    const dialog = document.querySelector(POST_DIALOG_SELECTOR);
-    if (dialog) {
-      const closeBtn = dialog.querySelector(
-        'div[aria-label="Close"], div[aria-label="close"], div[aria-label="বন্ধ করুন"], div[role="button"][aria-label*="lose"], div.x1i10hfl[aria-label*="lose"]'
-      );
-      if (closeBtn) robustClick(closeBtn);
-      await wait(500);
-    }
-
-    // one last Escape
-    if (document.querySelector(POST_DIALOG_SELECTOR)) {
-      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
-      await wait(300);
-    }
-
-    if (!document.querySelector(POST_DIALOG_SELECTOR)) {
-      log('Dialog closed', 'success');
-    } else {
-      log('Dialog might still be open', 'error');
-    }
-  }
-
-  async function runLoop() {
-    // start at 1 to skip the first blank/header post
-    let currentFeedIndex = 1;
-    let consecutiveEmptyScrolls = 0;
-
-    while (!state.stopRequested) {
-      if (state.maxPosts > 0 && scrapedPosts.length >= state.maxPosts) {
-        log(`Reached target of ${state.maxPosts} posts`, 'success');
-        break;
-      }
-
-      const posts = getFeedPosts();
-      log(`Feed has ${posts.length} visible posts, looking at index ${currentFeedIndex}`);
-
-      if (currentFeedIndex >= posts.length) {
-        // need more posts — scroll the feed
-        log('Need more posts, scrolling feed...');
-        setPhase('Scrolling feed for more posts');
-        window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' });
-        await wait(1500);
-
-        const newPosts = getFeedPosts();
-        if (newPosts.length <= currentFeedIndex) {
-          consecutiveEmptyScrolls++;
-          log(`Still not enough posts after scroll (attempt ${consecutiveEmptyScrolls})`, 'warning');
-          if (consecutiveEmptyScrolls >= 12) {
-            log('No more posts loading after repeated scrolling — stopping', 'warning');
-            break;
-          }
-          continue;
-        }
-        consecutiveEmptyScrolls = 0;
-        continue;
-      }
-
-      consecutiveEmptyScrolls = 0;
-      const article = posts[currentFeedIndex];
-
-      // skip if we already scraped this one
-      const sig = generatePostSignature(article);
-      if (sig && scrapedSignatures.has(sig)) {
-        log(`Post at index ${currentFeedIndex} already scraped, skipping`);
-        currentFeedIndex++;
-        continue;
-      }
-
-      const postNumber = scrapedPosts.length + 1;
-      state.postIndex = postNumber;
-      setPhase(`Processing post ${postNumber}`);
-
-      log(`Processing post ${postNumber} (feed index ${currentFeedIndex})`);
-
-      const opened = await openPost(article);
-
-      if (!opened) {
-        log(`Could not open post ${postNumber}, moving on`, 'warning');
-        currentFeedIndex++;
-        continue;
-      }
-
-      await tryClickAllComments();
-
+      // 3. Scroll down to load comments from default filter
       await scrollUntilNoNewComments();
 
+      // 4. Expand reply threads
       await expandAllReplies();
 
-      setPhase('Extracting data');
-      const postContent = extractPostContent();
+      // 5. Extract comments
       const comments = extractComments();
-      const finalSig = generatePostSignature(article, postContent) || sig;
 
-      const scraped = { postNumber, signature: finalSig, postContent, comments };
-      scrapedPosts.push(scraped);
-      if (sig) scrapedSignatures.add(sig);
-      if (finalSig) scrapedSignatures.add(finalSig);
-      persistScrapedPosts();
-
-      log(`Post ${postNumber}: ${postContent ? 'content found' : 'no content'}, ${comments.length} comments`, 'success');
-
-      await closeDialog();
-      await wait(300);
-
-      state.nextPostIndex = scrapedPosts.length;
-      writeStatus();
-      currentFeedIndex++;
-
-      // scroll the next post into view
-      const updatedPosts = getFeedPosts();
-      if (currentFeedIndex < updatedPosts.length) {
-        log('Scrolling next post into view');
-        updatedPosts[currentFeedIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-        await wait(600);
+      // 6. Fallback: if postContent was empty, scroll back to top and retry
+      if (!postContent) {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        await wait(800);
+        postContent = await extractPostContent();
       }
+
+      return {
+        success: true,
+        postContent,
+        comments,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.message || String(err),
+      };
     }
-
-    state.running = false;
-    state.stopRequested = false;
-    const completed = state.maxPosts > 0 && scrapedPosts.length >= state.maxPosts;
-    setPhase(completed ? 'Completed' : 'Stopped');
-    writeStatus();
-    log(completed ? `Done — ${scrapedPosts.length} posts scraped` : `Stopped — ${scrapedPosts.length} posts scraped`,
-      completed ? 'success' : 'warning');
   }
 
-  async function start(requestedMaxPosts = undefined) {
-    if (state.running) { log('Already running', 'warning'); return; }
-    await stateReady;
-
-    const saved = await chrome.storage.local.get([STATUS_KEY, SCRAPED_POSTS_KEY, 'scrapebookMaxPosts']);
-    if (requestedMaxPosts !== undefined) state.maxPosts = requestedMaxPosts;
-    else if (saved.scrapebookMaxPosts !== undefined) state.maxPosts = saved.scrapebookMaxPosts;
-
-    if (!scrapedPosts.length && Array.isArray(saved[SCRAPED_POSTS_KEY])) {
-      scrapedPosts.length = 0;
-      scrapedPosts.push(...saved[SCRAPED_POSTS_KEY]);
-      scrapedSignatures.clear();
-      for (const p of scrapedPosts) {
-        if (p.signature) scrapedSignatures.add(p.signature);
-        const fb = generatePostSignature(null, p.postContent);
-        if (fb) scrapedSignatures.add(fb);
-      }
-    }
-    state.nextPostIndex = scrapedPosts.length;
-    state.postIndex = scrapedPosts.length;
-
-    state.running = true;
-    state.stopRequested = false;
-    state.logs = [];
-    state.startedAt = new Date().toISOString();
-    setPhase('Starting');
-    log(`Scanner started (target: ${state.maxPosts > 0 ? state.maxPosts + ' posts' : 'unlimited'})`);
-    writeStatus();
-
-    runLoop().catch(err => {
-      state.running = false;
-      state.stopRequested = false;
-      setPhase('Error');
-      log(`Error: ${err.message || err}`, 'error');
-      writeStatus();
-    });
-  }
-
-  function stop() {
-    if (!state.running) return;
-    state.stopRequested = true;
-    setPhase('Finishing current post');
-    log('Stop requested', 'warning');
-  }
-
+  // ==========================================
+  // Message Listener
+  // ==========================================
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'START_SCAN') start(message.maxPosts);
-    if (message.type === 'STOP_SCAN') stop();
-    if (message.type === 'CLEAR_STORED_STATE') clearStoredState();
-    if (message.type === 'GET_SCRAPED_POSTS') sendResponse({ posts: scrapedPosts });
-    if (message.type === 'EXPORT_JSON') sendResponse({ content: exportAsJSON(scrapedPosts), mimeType: 'application/json' });
-    if (message.type === 'EXPORT_TXT') sendResponse({ content: exportAsTXT(scrapedPosts), mimeType: 'text/plain' });
-    if (message.type === 'GET_STATUS') {
-      sendResponse({
-        running: state.running, phase: state.phase, postIndex: state.postIndex,
-        nextPostIndex: state.nextPostIndex, maxPosts: state.maxPosts, logs: state.logs,
-        startedAt: state.startedAt,
-      });
+    if (message.type === 'PING') {
+      sendResponse({ pong: true });
+      return false;
     }
-    return true;
+
+    if (message.type === 'START_SCAN' || message.type === 'START_COLLECT_LINKS') {
+      runLinkCollector(message.maxPosts);
+      sendResponse({ success: true });
+      return false;
+    }
+
+    if (message.type === 'STOP_SCAN' || message.type === 'STOP_COLLECT_LINKS') {
+      stopLinkCollector();
+      sendResponse({ success: true });
+      return false;
+    }
+
+    if (message.type === 'SCRAPE_STANDALONE_POST') {
+      scrapeStandalonePost()
+        .then((res) => {
+          sendResponse(res);
+        })
+        .catch((err) => {
+          sendResponse({ success: false, error: err.message || String(err) });
+        });
+      return true; // asynchronous response
+    }
+
+    return false;
   });
 
   console.log(`${LOG_PREFIX} Content script loaded`);
