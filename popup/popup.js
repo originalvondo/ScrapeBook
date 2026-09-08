@@ -118,7 +118,7 @@ function render(status = {}, posts = []) {
   if (!totalPosts) {
     const empty = document.createElement('li');
     empty.className = 'empty';
-    empty.textContent = 'No posts collected yet. Open a Facebook group and click "Start scanner".';
+    empty.textContent = 'No posts collected yet. Open a Facebook group and click "Start Collecting".';
     postsListElement.append(empty);
     return;
   }
