@@ -58,7 +58,7 @@ async function ensureTabReady(tabId) {
 
 function getMaxPostsValue() {
   const parsed = parseInt(maxPostsElement.value, 10);
-  return isNaN(parsed) || parsed < 0 ? 20 : parsed;
+  return isNaN(parsed) || parsed < 1 ? 20 : parsed;
 }
 
 function render(status = {}, posts = []) {

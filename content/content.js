@@ -116,7 +116,7 @@
       [STATUS_KEY]: {
         running: true,
         stage: 'collecting_links',
-        phase: `Collecting post links (${postsList.length}/${maxPosts === Infinity ? '∞' : maxPosts})...`,
+        phase: `Collecting post links (${postsList.length}/${maxPosts})...`,
         postIndex: postsList.length,
         scrapedIndex: postsList.filter(p => p.status === 'done').length,
         maxPosts: targetLimit,
@@ -156,7 +156,7 @@
           [STATUS_KEY]: {
             running: true,
             stage: 'collecting_links',
-            phase: `Collecting post links (${postsList.length}/${maxPosts === Infinity ? '∞' : maxPosts})...`,
+            phase: `Collecting post links (${postsList.length}/${maxPosts})...`,
             postIndex: postsList.length,
             scrapedIndex: postsList.filter(p => p.status === 'done').length,
             maxPosts: targetLimit,
