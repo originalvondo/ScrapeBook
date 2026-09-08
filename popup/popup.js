@@ -9,6 +9,7 @@ const exportJsonButton = document.querySelector('#export-json');
 const exportTxtButton = document.querySelector('#export-txt');
 const clearStateButton = document.querySelector('#clear-state');
 const maxPostsElement = document.querySelector('#max-posts');
+const retryFailedButton = document.querySelector('#retry-failed');
 
 let activeTabId;
 
@@ -60,7 +61,6 @@ function getMaxPostsValue() {
   return isNaN(parsed) || parsed < 0 ? 20 : parsed;
 }
 
-// Render the UI from storage snapshot
 function render(status = {}, posts = []) {
   const running = Boolean(status.running);
   statusElement.classList.toggle('running', running);
@@ -74,8 +74,9 @@ function render(status = {}, posts = []) {
   phaseElement.textContent = status.phase || 'Ready';
 
   const totalPosts = posts.length;
-  const scrapedPosts = posts.filter(p => p.status === 'done').length;
-  const queuedPosts = posts.filter(p => p.status === 'queued').length;
+  const scrapedPosts = posts.filter((p) => p.status === 'done').length;
+  const queuedPosts = posts.filter((p) => p.status === 'queued').length;
+  const failedPosts = posts.filter((p) => p.status === 'error');
 
   if (totalPosts > 0) {
     postCountElement.textContent = `Links: ${totalPosts} | Done: ${scrapedPosts}`;
@@ -83,15 +84,18 @@ function render(status = {}, posts = []) {
     postCountElement.textContent = '0';
   }
 
-  if (status.maxPosts !== undefined && document.activeElement !== maxPostsElement) {
-    maxPostsElement.value = status.maxPosts;
-  }
-
   maxPostsElement.disabled = running;
   stopButton.disabled = !running;
   clearStateButton.disabled = running;
 
-  // Primary button label & state
+  if (failedPosts.length > 0) {
+    retryFailedButton.style.display = 'block';
+    retryFailedButton.textContent = `Retry Failed Posts (${failedPosts.length})`;
+    retryFailedButton.disabled = running;
+  } else {
+    retryFailedButton.style.display = 'none';
+  }
+
   if (running) {
     startButton.textContent = 'Running...';
     startButton.disabled = true;
@@ -99,16 +103,14 @@ function render(status = {}, posts = []) {
     startButton.textContent = `Scrape Queued Posts (${queuedPosts})`;
     startButton.disabled = false;
   } else {
-    startButton.textContent = 'Start scanner';
+    startButton.textContent = 'Start Collecting';
     startButton.disabled = false;
   }
 
-  // Export buttons are available whenever there is at least 1 post collected
   const hasPosts = totalPosts > 0;
   exportJsonButton.disabled = !hasPosts;
   exportTxtButton.disabled = !hasPosts;
 
-  // Render the post queue / progress cards
   logCountElement.textContent = `${totalPosts} post${totalPosts === 1 ? '' : 's'}`;
   const previousScrollTop = postsListElement.scrollTop;
   postsListElement.replaceChildren();
@@ -121,7 +123,6 @@ function render(status = {}, posts = []) {
     return;
   }
 
-  // Render cards (newest or in sequential order)
   posts.forEach((post, index) => {
     const card = document.createElement('li');
     card.className = `post-card ${post.status || 'queued'}`;
@@ -179,41 +180,41 @@ function render(status = {}, posts = []) {
 }
 
 async function loadAndRender() {
-  const data = await chrome.storage.local.get(['scrapebookStatus', 'scrapebookPosts', 'scrapebookMaxPosts']);
-  const status = data.scrapebookStatus || {};
+  const data = await chrome.storage.local.get(['scrapebookPosts', 'scrapebookStatus', 'scrapebookMaxPosts']);
   const posts = Array.isArray(data.scrapebookPosts) ? data.scrapebookPosts : [];
+  const status = data.scrapebookStatus || {};
   if (data.scrapebookMaxPosts !== undefined && document.activeElement !== maxPostsElement) {
     maxPostsElement.value = data.scrapebookMaxPosts;
   }
   render(status, posts);
 }
 
-// Start handling: either starts Stage 1 on active tab or starts Stage 2 if queued posts exist
 async function handleStart() {
-  const data = await chrome.storage.local.get(['scrapebookPosts', 'scrapebookStatus']);
-  const posts = Array.isArray(data.scrapebookPosts) ? data.scrapebookPosts : [];
-  const queuedCount = posts.filter(p => p.status === 'queued').length;
-
   const maxPosts = getMaxPostsValue();
   await chrome.storage.local.set({ scrapebookMaxPosts: maxPosts });
 
+  const data = await chrome.storage.local.get(['scrapebookPosts', 'scrapebookStatus']);
+  const posts = Array.isArray(data.scrapebookPosts) ? data.scrapebookPosts : [];
+  const queuedCount = posts.filter((p) => p.status === 'queued').length;
+
   if (queuedCount > 0) {
-    // Stage 2: Scrape remaining queued posts in background tabs
     chrome.runtime.sendMessage({ type: 'START_POSTS_SCRAPING' });
     render({ running: true, stage: 'scraping_posts', phase: 'Starting background scraper...' }, posts);
     return;
   }
 
   if (posts.length > 0 && maxPosts > 0 && posts.length >= maxPosts) {
-    render({
-      ...data.scrapebookStatus,
-      phase: `Collected ${posts.length}/${maxPosts} posts. Increase Max posts or click "Clear saved data".`,
-      running: false,
-    }, posts);
+    render(
+      {
+        ...data.scrapebookStatus,
+        phase: `Collected ${posts.length}/${maxPosts} posts. Increase Max posts or click "Clear saved data".`,
+        running: false,
+      },
+      posts
+    );
     return;
   }
 
-  // Stage 1: Collect links on active Facebook group tab
   const tab = await getActiveTab();
   activeTabId = tab?.id;
   if (!activeTabId || !tab || !isFacebookUrl(tab.url)) {
@@ -237,12 +238,9 @@ async function handleStart() {
   });
 }
 
-// Stop handling: gracefully halts either stage and closes worker tabs
 async function handleStop() {
-  // 1. Stop background tab scraper
   chrome.runtime.sendMessage({ type: 'STOP_PIPELINE' }).catch(() => {});
 
-  // 2. Stop link collector on active tab
   const tab = await getActiveTab();
   if (tab?.id && isFacebookUrl(tab.url)) {
     chrome.tabs.sendMessage(tab.id, { type: 'STOP_COLLECT_LINKS' }).catch(() => {});
@@ -258,25 +256,78 @@ async function handleStop() {
       running: false,
       phase: 'Stopped by user',
       stage: 'stopped',
-    }
+    },
   });
 
   loadAndRender();
 }
 
+const COMMENT_META_LINES = new Set([
+  '·', '•', '.', '-',
+  'like', 'লাইক',
+  'reply', 'উত্তর দিন',
+  'share', 'শেয়ার করুন', 'শেয়ার করুন',
+  'follow', 'অনুসরণ করুন',
+  'top fan', 'শীর্ষ ফ্যান',
+  'author', 'লেখক',
+  'admin', 'অ্যাডমিন', 'এডমিন',
+  'moderator', 'মডারেটর',
+  'group expert', 'গ্রুপ বিশেষজ্ঞ',
+  'edited', 'সম্পাদিত',
+  'just now', 'এখনই', 'মুহূর্ত আগে'
+]);
+
+const RELATIVE_TIME_REGEX =
+  /^[\s·•]*[\d০-৯]+\s*(?:[smhdwy]|sec|secs|min|mins|hr|hrs|day|days|wk|wks|week|weeks|mo|mos|month|months|yr|yrs|year|years|সেকেন্ড|মিনিট|মি\.|ঘণ্টা|ঘন্টা|ঘ\.|দিন|সপ্তাহ|মাস|বছর)(?:\s*(?:ago|আগে))?(?:\s*[·•]\s*(?:edited|সম্পাদিত))?[\s·•]*$/iu;
+const EDITED_TIME_REGEX = /^[\s·•]*(?:edited|সম্পাদিত)\s*[·•]\s*[\d০-৯]+/iu;
+
+function isCommentMetaLine(line) {
+  const l = (line || '').trim();
+  if (!l) return true;
+  if (COMMENT_META_LINES.has(l.toLowerCase())) return true;
+  if (RELATIVE_TIME_REGEX.test(l)) return true;
+  if (EDITED_TIME_REGEX.test(l)) return true;
+  return false;
+}
+
+function cleanCommentText(text) {
+  if (typeof text !== 'string') return '';
+  const lines = text.split('\n');
+  while (lines.length && isCommentMetaLine(lines[0])) {
+    lines.shift();
+  }
+  while (lines.length && isCommentMetaLine(lines[lines.length - 1])) {
+    lines.pop();
+  }
+  return lines.join('\n').trim();
+}
+
 function exportAsJSON(posts) {
   const sanitized = posts.map((post) => {
-    const { cleanUrl, cleanURL, commentsCount, ...rest } = post;
-    const sanitizedComments = Array.isArray(rest.comments)
-      ? rest.comments.map((c) => {
-          if (typeof c === 'string') return { comment: c };
-          const { username, ...cRest } = c;
-          return cRest;
-        })
+    const sanitizedComments = Array.isArray(post.comments)
+      ? post.comments
+          .map((c) => {
+            if (typeof c === 'string') {
+              const cleaned = cleanCommentText(c);
+              return cleaned ? { comment: cleaned } : null;
+            }
+            const { username, ...cRest } = c;
+            if (cRest.comment) {
+              cRest.comment = cleanCommentText(cRest.comment);
+              if (!cRest.comment) return null;
+            }
+            return cRest;
+          })
+          .filter(Boolean)
       : [];
 
     return {
-      ...rest,
+      id: post.id,
+      postNumber: post.postNumber,
+      url: post.url,
+      status: post.status,
+      postContent: post.postContent || '',
+      ...(post.error ? { error: post.error } : {}),
       comments: sanitizedComments,
     };
   });
@@ -285,25 +336,36 @@ function exportAsJSON(posts) {
 }
 
 function exportAsTXT(posts) {
-  return posts.map((post, index) => {
-    const commentsText = Array.isArray(post.comments) && post.comments.length
-      ? post.comments.map((c, ci) => {
-          const text = typeof c === 'string' ? c : (c.comment || '');
-          return `${ci + 1}. ${text}`;
-        }).join('\n\n')
-      : '(No comments scraped)';
+  return posts
+    .map((post, index) => {
+      const filteredComments = Array.isArray(post.comments)
+        ? post.comments
+            .map((c) => {
+              const text = typeof c === 'string' ? c : c.comment || '';
+              return cleanCommentText(text);
+            })
+            .filter(Boolean)
+        : [];
 
-    return [
-      `Post #${index + 1}: ${post.url}`,
-      `Status: ${post.status || 'unknown'}`,
-      '',
-      'Post content:',
-      post.postContent || '(No post content found)',
-      '',
-      'Comments:',
-      commentsText,
-    ].join('\n');
-  }).join('\n\n----------------------------------------\n\n');
+      const commentsText =
+        filteredComments.length
+          ? filteredComments
+              .map((text, ci) => `${ci + 1}. ${text}`)
+              .join('\n\n')
+          : '(No comments scraped)';
+
+      return [
+        `Post #${index + 1}: ${post.url}`,
+        `Status: ${post.status || 'unknown'}`,
+        '',
+        'Post content:',
+        post.postContent || '(No post content found)',
+        '',
+        'Comments:',
+        commentsText,
+      ].join('\n');
+    })
+    .join('\n\n----------------------------------------\n\n');
 }
 
 async function triggerDownload(content, mimeType, filename) {
@@ -330,30 +392,59 @@ async function handleExport(type) {
   }
 }
 
+async function handleRetryFailed() {
+  const data = await chrome.storage.local.get(['scrapebookPosts', 'scrapebookStatus']);
+  const posts = Array.isArray(data.scrapebookPosts) ? data.scrapebookPosts : [];
+
+  let count = 0;
+  for (const p of posts) {
+    if (p.status === 'error') {
+      p.status = 'queued';
+      p.error = null;
+      count++;
+    }
+  }
+
+  if (count === 0) return;
+
+  await chrome.storage.local.set({
+    scrapebookPosts: posts,
+    scrapebookStatus: {
+      ...(data.scrapebookStatus || {}),
+      running: true,
+      stage: 'scraping_posts',
+      phase: `Retrying ${count} failed post${count === 1 ? '' : 's'}...`,
+    },
+  });
+
+  chrome.runtime.sendMessage({ type: 'START_POSTS_SCRAPING' });
+  render({ running: true, stage: 'scraping_posts', phase: `Retrying ${count} failed post${count === 1 ? '' : 's'}...` }, posts);
+}
+
 async function handleClearState() {
   await chrome.storage.local.remove(['scrapebookStatus', 'scrapebookPosts']);
   render({ phase: 'Ready' }, []);
 }
 
-// Event Listeners
 startButton.addEventListener('click', handleStart);
 stopButton.addEventListener('click', handleStop);
+retryFailedButton.addEventListener('click', handleRetryFailed);
 exportJsonButton.addEventListener('click', () => handleExport('json'));
 exportTxtButton.addEventListener('click', () => handleExport('txt'));
 clearStateButton.addEventListener('click', handleClearState);
 
-maxPostsElement.addEventListener('change', async () => {
+const saveMaxPosts = async () => {
   const val = getMaxPostsValue();
-  maxPostsElement.value = val;
   await chrome.storage.local.set({ scrapebookMaxPosts: val });
-});
+};
 
-// Reactively re-render whenever storage changes (live updates from background worker or content script)
+maxPostsElement.addEventListener('input', saveMaxPosts);
+maxPostsElement.addEventListener('change', saveMaxPosts);
+
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.scrapebookStatus || changes.scrapebookPosts) {
     loadAndRender();
   }
 });
 
-// Initial load
 loadAndRender();

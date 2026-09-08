@@ -220,6 +220,20 @@ h1 {
   margin: 0 0 12px;
 }
 
+.button.warning {
+  width: 100%;
+  margin: 0 0 12px;
+  border-color: #8c6a2b;
+  background: #3e3016;
+  color: #ffd666;
+}
+
+.button.warning:hover:not(:disabled) {
+  background: #52401c;
+  border-color: #b38836;
+  color: #ffe58f;
+}
+
 .button.danger {
   width: 100%;
   margin: 0 0 14px;

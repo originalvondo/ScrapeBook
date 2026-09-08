@@ -1,11 +1,9 @@
-// Open the side panel when the user clicks the extension toolbar action icon
 if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
   chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) => console.error('Side panel behavior error:', error));
 }
 
-// Fallback in case setPanelBehavior is not supported in the active environment
 chrome.action.onClicked.addListener(async (tab) => {
   if (chrome.sidePanel && chrome.sidePanel.open) {
     try {
@@ -16,7 +14,6 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
-// Automatically inject content script into open Facebook tabs on install / reload
 async function injectContentScriptIntoOpenTabs() {
   try {
     const tabs = await chrome.tabs.query({ url: ['*://*.facebook.com/*', '*://facebook.com/*'] });
@@ -37,10 +34,6 @@ chrome.runtime.onInstalled.addListener(() => {
   injectContentScriptIntoOpenTabs();
 });
 
-// ============================================================
-// STAGE 2: Background Tab Post Scraping Orchestrator
-// ============================================================
-
 let currentWorkerTabId = null;
 let isScrapingQueue = false;
 let stopRequested = false;
@@ -49,8 +42,9 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForTabReady(tabId, timeoutMs = 25000) {
+async function waitForTabReady(tabId, timeoutMs = 40000) {
   const startTime = Date.now();
+  let injectionAttempted = false;
 
   while (Date.now() - startTime < timeoutMs) {
     if (stopRequested) return false;
@@ -59,7 +53,6 @@ async function waitForTabReady(tabId, timeoutMs = 25000) {
       const tab = await chrome.tabs.get(tabId);
       if (!tab) return false;
 
-      // Check if content script is already responsive
       const ready = await new Promise((resolve) => {
         chrome.tabs.sendMessage(tabId, { type: 'PING' }, (res) => {
           resolve(!chrome.runtime.lastError && res && res.pong);
@@ -68,13 +61,13 @@ async function waitForTabReady(tabId, timeoutMs = 25000) {
 
       if (ready) return true;
 
-      // If page reached 'complete' status but script not yet responding, try injecting
-      if (tab.status === 'complete') {
+      if ((tab.status === 'complete' || Date.now() - startTime > 3500) && !injectionAttempted) {
         try {
           await chrome.scripting.executeScript({
             target: { tabId },
             files: ['content/content.js'],
           });
+          injectionAttempted = true;
         } catch (_) {}
       }
     } catch (_) {
@@ -90,13 +83,11 @@ async function waitForTabReady(tabId, timeoutMs = 25000) {
 async function scrapeSinglePostInTab(url) {
   let tabId = null;
   try {
-    // 1. Open background tab without taking focus from user
     const tab = await chrome.tabs.create({ url, active: false });
     tabId = tab.id;
     currentWorkerTabId = tabId;
 
-    // 2. Wait for page load and content script readiness
-    const ready = await waitForTabReady(tabId, 25000);
+    const ready = await waitForTabReady(tabId, 40000);
     if (!ready) {
       if (stopRequested) return { success: false, error: 'Stopped by user' };
       return { success: false, error: 'Page load or content script timed out' };
@@ -104,8 +95,7 @@ async function scrapeSinglePostInTab(url) {
 
     await wait(800);
 
-    // 3. Scrape post and comments
-    const result = await new Promise((resolve) => {
+    const scrapePromise = new Promise((resolve) => {
       chrome.tabs.sendMessage(tabId, { type: 'SCRAPE_STANDALONE_POST' }, (res) => {
         if (chrome.runtime.lastError || !res) {
           resolve({ success: false, error: chrome.runtime.lastError?.message || 'No response from post page' });
@@ -115,6 +105,13 @@ async function scrapeSinglePostInTab(url) {
       });
     });
 
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({ success: false, error: 'Post scraping timed out after 60 seconds' });
+      }, 60000);
+    });
+
+    const result = await Promise.race([scrapePromise, timeoutPromise]);
     return result;
   } catch (err) {
     return { success: false, error: err.message || String(err) };
@@ -134,7 +131,6 @@ async function processScrapeQueue() {
   stopRequested = false;
 
   try {
-    // Reset any posts stuck in 'scraping' back to 'queued' from prior interrupted run
     const initData = await chrome.storage.local.get(['scrapebookPosts']);
     let posts = Array.isArray(initData.scrapebookPosts) ? initData.scrapebookPosts : [];
     let updatedInit = false;
@@ -153,17 +149,12 @@ async function processScrapeQueue() {
       posts = Array.isArray(data.scrapebookPosts) ? data.scrapebookPosts : [];
       const status = data.scrapebookStatus || {};
 
-      // Find first queued post
-      const nextIndex = posts.findIndex(p => p.status === 'queued');
-      if (nextIndex === -1) {
-        // All posts scraped!
-        break;
-      }
+      const nextIndex = posts.findIndex((p) => p.status === 'queued');
+      if (nextIndex === -1) break;
 
       const post = posts[nextIndex];
-      const scrapedSoFar = posts.filter(p => p.status === 'done').length;
+      const scrapedSoFar = posts.filter((p) => p.status === 'done').length;
 
-      // Update post status to 'scraping'
       posts[nextIndex].status = 'scraping';
       await chrome.storage.local.set({
         scrapebookPosts: posts,
@@ -173,15 +164,13 @@ async function processScrapeQueue() {
           stage: 'scraping_posts',
           phase: `Scraping post ${scrapedSoFar + 1} of ${posts.length}...`,
           scrapedIndex: scrapedSoFar,
-        }
+        },
       });
 
-      // Scrape in background tab
       const result = await scrapeSinglePostInTab(post.url);
 
       if (stopRequested) break;
 
-      // Re-read posts in case state changed while scraping
       const freshData = await chrome.storage.local.get(['scrapebookPosts', 'scrapebookStatus']);
       const freshPosts = Array.isArray(freshData.scrapebookPosts) ? freshData.scrapebookPosts : posts;
       const freshStatus = freshData.scrapebookStatus || {};
@@ -196,7 +185,7 @@ async function processScrapeQueue() {
         freshPosts[nextIndex].error = result?.error || 'Failed to scrape post';
       }
 
-      const updatedScraped = freshPosts.filter(p => p.status === 'done').length;
+      const updatedScraped = freshPosts.filter((p) => p.status === 'done').length;
       await chrome.storage.local.set({
         scrapebookPosts: freshPosts,
         scrapebookStatus: {
@@ -205,12 +194,11 @@ async function processScrapeQueue() {
           stage: stopRequested ? 'stopped' : 'scraping_posts',
           phase: `Scraped ${updatedScraped} of ${freshPosts.length}`,
           scrapedIndex: updatedScraped,
-        }
+        },
       });
 
       if (stopRequested) break;
 
-      // Rate limit safety pause
       await wait(1200);
     }
   } catch (err) {
@@ -220,7 +208,7 @@ async function processScrapeQueue() {
     const finalData = await chrome.storage.local.get(['scrapebookPosts', 'scrapebookStatus']);
     const finalPosts = Array.isArray(finalData.scrapebookPosts) ? finalData.scrapebookPosts : [];
     const finalStatus = finalData.scrapebookStatus || {};
-    const anyQueued = finalPosts.some(p => p.status === 'queued');
+    const anyQueued = finalPosts.some((p) => p.status === 'queued');
 
     await chrome.storage.local.set({
       scrapebookStatus: {
@@ -228,11 +216,13 @@ async function processScrapeQueue() {
         running: false,
         stage: anyQueued && stopRequested ? 'stopped' : 'completed',
         phase: anyQueued && stopRequested ? 'Stopped' : 'Completed',
-      }
+      },
     });
 
     if (currentWorkerTabId) {
-      try { await chrome.tabs.remove(currentWorkerTabId); } catch (_) {}
+      try {
+        await chrome.tabs.remove(currentWorkerTabId);
+      } catch (_) {}
       currentWorkerTabId = null;
     }
   }
@@ -247,7 +237,6 @@ function stopPipeline() {
   }
 }
 
-// Handle messages from popup or content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'START_POSTS_SCRAPING') {
     processScrapeQueue();
